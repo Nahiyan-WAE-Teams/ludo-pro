@@ -101,9 +101,10 @@ static func legal_moves_for_board(color: String, board: Dictionary, roll: int, p
 		var from_progress := int(move.from)
 		var to_progress := int(move.to)
 		var path_blocked := false
-		if to_progress < 52:
-			var first_step := 0 if from_progress == -1 else from_progress + 1
-			for progress in range(first_step, to_progress + 1):
+		var first_step := 0 if from_progress == -1 else from_progress + 1
+		var last_track_progress := mini(to_progress, 51)
+		if first_step <= last_track_progress:
+			for progress in range(first_step, last_track_progress + 1):
 				var square := absolute(color, progress)
 				if is_blockade_at(board, square, player_count):
 					path_blocked = true
