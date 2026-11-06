@@ -704,7 +704,7 @@ func ai_choose_move() -> void:
 	if champion != "" or is_human(turn) or phase != "move" or busy:
 		return
 	var color: String = R.COLORS[turn]
-	var move := R.choose_ai_move(color, pieces, choices, roll, difficulty, team_match)
+	var move := R.choose_ai_move(color, pieces, choices, roll, difficulty, team_match, player_count)
 	if not move.is_empty():
 		commit_move(move)
 
