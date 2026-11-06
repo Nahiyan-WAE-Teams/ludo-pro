@@ -56,6 +56,8 @@ var banner_time := 0.0
 var banner_text := ""
 var banner_color := GOLD
 var pulse := 0.0
+var victory_time := 0.0
+var victory_announced := false
 var ui_scale := 1.0
 var ui_offset := Vector2.ZERO
 
@@ -67,6 +69,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	pulse += delta
+	if champion != "":
+		victory_time += delta
 	if rolling > 0.0:
 		rolling = maxf(0.0, rolling - delta)
 		dice_spin += delta * 22.0
@@ -441,7 +445,11 @@ func finish_animation() -> void:
 		champion = color
 		phase = "won"
 		busy = false
+		victory_time = 0.0
+		victory_announced = false
 		spawn_burst(O + Vector2(285, 285), GOLD, 44)
+		spawn_burst(Vector2(640, 355), C[color], 64)
+		announce_victory(color)
 		save_match()
 		queue_redraw()
 		return
@@ -474,6 +482,18 @@ func ai_choose_move() -> void:
 	var move := R.choose_ai_move(color, pieces, choices, roll, difficulty)
 	if not move.is_empty():
 		commit_move(move)
+
+func announce_victory(color: String) -> void:
+	var announcement: String = R.victory_announcement(color)
+	banner_text = "CONGRATULATIONS, %s!" % N[color]
+	banner_color = GOLD
+	banner_time = 3.2
+	victory_announced = true
+	# Use the Android device's installed native text-to-speech engine when available.
+	var voices: Array = DisplayServer.tts_get_voices()
+	if not voices.is_empty():
+		DisplayServer.tts_speak(announcement, "", 92, 1.0, 0.92, 7401, true)
+	Input.vibrate_handheld(90)
 
 func add_log(message: String) -> void:
 	log.push_front(message)
@@ -561,15 +581,28 @@ func draw_rules() -> void:
 	draw_string(ThemeDB.fallback_font, Vector2(365, 565), "BACK TO GAME", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("#202a30"))
 
 func draw_victory() -> void:
-	draw_rect(Rect2(0, 0, 1280, 720), Color(0, 0, 0, 0.82))
-	draw_panel(Rect2(350, 165, 580, 390), Color("#17242e"))
-	draw_circle(Vector2(640, 236), 34, Color("#3a3328"))
-	draw_string(ThemeDB.fallback_font, Vector2(624, 246), "♛", HORIZONTAL_ALIGNMENT_LEFT, -1, 32, GOLD)
-	draw_string(ThemeDB.fallback_font, Vector2(640, 302), "THE CROWN IS CLAIMED", HORIZONTAL_ALIGNMENT_CENTER, 400, 10, GOLD)
-	draw_string(ThemeDB.fallback_font, Vector2(640, 356), N[champion] + " WINS", HORIZONTAL_ALIGNMENT_CENTER, 450, 34, C[champion])
-	draw_string(ThemeDB.fallback_font, Vector2(640, 390), "%d turns  ·  %d captures" % [turns, captures], HORIZONTAL_ALIGNMENT_CENTER, 400, 11, Color("#c3cdd2"))
-	draw_round_rect(Rect2(520, 438, 240, 58), GOLD, 10)
-	draw_string(ThemeDB.fallback_font, Vector2(640, 473), "PLAY AGAIN", HORIZONTAL_ALIGNMENT_CENTER, 200, 12, Color("#202a30"))
+	var reveal := clampf(victory_time / 0.72, 0.0, 1.0)
+	var eased := 1.0 - pow(1.0 - reveal, 3.0)
+	var breathe := 1.0 + sin(victory_time * 2.8) * 0.012
+	var panel_size := Vector2(620, 430) * eased
+	var panel_rect := Rect2(Vector2(640, 360) - panel_size * 0.5, panel_size)
+	draw_rect(Rect2(0, 0, 1280, 720), Color(0.015, 0.025, 0.035, 0.88 * eased))
+	if reveal > 0.0:
+		draw_circle(Vector2(640, 245), 128.0 * eased, Color(GOLD, 0.035))
+		draw_arc(Vector2(640, 245), 104.0 * eased, victory_time, victory_time + TAU * 0.78, 96, Color(GOLD, 0.65 * eased), 1.5, true)
+	draw_panel(panel_rect, Color("#17242e"))
+	var emblem_scale := eased * breathe
+	draw_circle(Vector2(640, 235), 43.0 * emblem_scale, Color("#3a3328"))
+	draw_arc(Vector2(640, 235), 43.0 * emblem_scale, 0, TAU, 64, GOLD, 2.0, true)
+	draw_string(ThemeDB.fallback_font, Vector2(640, 248), "♛", HORIZONTAL_ALIGNMENT_CENTER, 80, 34, GOLD)
+	draw_string(ThemeDB.fallback_font, Vector2(640, 307), "THE ROYAL BOARD ANNOUNCES", HORIZONTAL_ALIGNMENT_CENTER, 440, 9, GOLD)
+	draw_string(ThemeDB.fallback_font, Vector2(640, 354), "CONGRATULATIONS!", HORIZONTAL_ALIGNMENT_CENTER, 500, 25, IVORY)
+	draw_string(ThemeDB.fallback_font, Vector2(640, 401), N[champion] + " IS THE CHAMPION", HORIZONTAL_ALIGNMENT_CENTER, 500, 21, C[champion])
+	draw_string(ThemeDB.fallback_font, Vector2(640, 430), "A brilliant victory. The crown is yours.", HORIZONTAL_ALIGNMENT_CENTER, 450, 10, Color("#c3cdd2"))
+	draw_string(ThemeDB.fallback_font, Vector2(640, 461), "%d turns   ·   %d captures" % [turns, captures], HORIZONTAL_ALIGNMENT_CENTER, 400, 9, MUTED)
+	draw_round_rect(Rect2(520, 495, 240, 54), GOLD, 10)
+	draw_round_rect(Rect2(525, 500, 230, 44), Color("#efd8ae"), 7)
+	draw_string(ThemeDB.fallback_font, Vector2(640, 528), "PLAY AGAIN", HORIZONTAL_ALIGNMENT_CENTER, 220, 11, Color("#202a30"))
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch and event.pressed:
