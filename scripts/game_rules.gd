@@ -129,8 +129,8 @@ static func score_move(color: String, all_tokens: Dictionary, move: Dictionary, 
 	if not captured.is_empty():
 		score += 260.0 + float(captured.size() - 1) * 80.0
 		for victim in captured:
-			score += float(int(board[victim.color][int(victim.token)]) / 52.0) * 28.0
-			score += float(4 - count_home_tokens(victim.color, board)) * 12.0
+			score += float(int(all_tokens[victim.color][int(victim.token)]) / 52.0) * 28.0
+			score += float(4 - count_home_tokens(victim.color, all_tokens)) * 12.0
 	if roll == 6 or not captured.is_empty():
 		score += 14.0
 	# A piece entering the home lane is immune to outer-track attacks.
