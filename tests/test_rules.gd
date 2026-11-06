@@ -51,6 +51,26 @@ func _initialize() -> void:
 	assert(not RULES.is_team_winner(team_board, "green"))
 	assert(RULES.team_victory_announcement("red").contains("Ruby & Amber"))
 
+	# Classic blockade rules: two same-color tokens block crossing and landing.
+	var blockade_board := {
+		"red":[5, -1, -1, -1],
+		"green":[2, 2, -1, -1], # Green absolute square 15 is a blockade.
+		"yellow":[-1, -1, -1, -1],
+		"blue":[-1, -1, -1, -1]
+	}
+	assert(RULES.is_blockade_at(blockade_board, 15, 4))
+	assert(RULES.legal_moves_for_board("red", blockade_board, 4, 4).is_empty())
+	assert(RULES.legal_moves_for_board("red", blockade_board, 3, 4).is_empty())
+	var blockade_escape := RULES.legal_moves_for_board("green", blockade_board, 1, 4)
+	assert(blockade_escape.size() == 2) # Either token may leave the blockade.
+	var friendly_stack_board := {
+		"red":[0, 1, -1, -1],
+		"green":[-1, -1, -1, -1],
+		"yellow":[-1, -1, -1, -1],
+		"blue":[-1, -1, -1, -1]
+	}
+	assert(RULES.legal_moves_for_board("red", friendly_stack_board, 1, 4).size() == 2)
+
 	# Release and exact-finish rules.
 	assert(RULES.legal_moves([-1, -1, -1, -1], 5).is_empty())
 	assert(RULES.legal_moves([-1, -1, -1, -1], 6).size() == 4)
