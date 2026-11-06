@@ -32,6 +32,10 @@ func _initialize() -> void:
 		"blue":[-1, -1, -1, -1]
 	}
 	assert(RULES.is_team_winner(team_board, "red"))
+	var teammate_board := {"red":[4,-1,-1,-1], "green":[-1,-1,-1,-1], "yellow":[44,-1,-1,-1], "blue":[-1,-1,-1,-1]}
+	var teammate_capture := RULES.apply_move("red", teammate_board, {"token":0,"from":4,"to":5,"kind":"move"}, true)
+	assert(teammate_capture.captured.is_empty())
+	assert(teammate_capture.board["yellow"][0] == 44)
 	assert(not RULES.is_team_winner(team_board, "green"))
 	assert(RULES.team_victory_announcement("red").contains("Ruby & Amber"))
 
