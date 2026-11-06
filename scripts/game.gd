@@ -608,6 +608,8 @@ func finish_animation() -> void:
 		spawn_burst(Vector2(640, 355), C[color], 64)
 		announce_victory(color)
 		save_match()
+		if mode == "lan":
+			publish_lan_state()
 		queue_redraw()
 		return
 	if roll != 6 and not captured:
