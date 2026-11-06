@@ -177,7 +177,7 @@ static func attack_potential(color: String, progress: int, board: Dictionary, te
 				value += float(7 - distance) * 1.8 * opponent_priority(enemy, board)
 	return value
 
-static func evaluate_position(color: String, board: Dictionary, team_match: bool = false, player_count: int = 4) -> float:
+static func evaluate_single_color(color: String, board: Dictionary, team_match: bool = false, player_count: int = 4) -> float:
 	var score := 0.0
 	var active_positions: Array[int] = []
 	for token_value in board[color]:
@@ -196,12 +196,19 @@ static func evaluate_position(color: String, board: Dictionary, team_match: bool
 			if absolute(color, pos) in SAFE:
 				score += 17.0
 			active_positions.append(pos)
-	# Small formation bonus rewards a useful spread without encouraging risky stacks.
 	for i in range(active_positions.size()):
 		for j in range(i + 1, active_positions.size()):
 			var gap: int = mini(absi(active_positions[i] - active_positions[j]), 52 - absi(active_positions[i] - active_positions[j]))
 			if gap >= 1 and gap <= 3:
 				score += 2.5
+	return score
+
+static func evaluate_position(color: String, board: Dictionary, team_match: bool = false, player_count: int = 4) -> float:
+	var score := evaluate_single_color(color, board, team_match, player_count)
+	if team_match:
+		for teammate in team_colors(color):
+			if teammate != color:
+				score += evaluate_single_color(teammate, board, true, player_count)
 	return score
 
 static func score_move(color: String, all_tokens: Dictionary, move: Dictionary, roll: int, team_match: bool = false, player_count: int = 4) -> int:
@@ -306,10 +313,12 @@ static func choose_ai_move(color: String, all_tokens: Dictionary, moves: Array[D
 		var outcome := apply_move(color, all_tokens, move, team_match, player_count)
 		# A capture or six grants another turn. Champion difficulty plans that bonus turn.
 		if difficulty == "champion":
-			if roll == 6 or not outcome.captured.is_empty():
+			var earns_bonus := roll == 6 or not outcome.captured.is_empty()
+			if earns_bonus:
 				score += extra_turn_lookahead(color, outcome.board, team_match, player_count) * 5.0
-			var reply_risk: float = multi_opponent_reply_risk(color, outcome.board, next_opponent_order(color, team_match, player_count), 3, team_match, player_count)
-			score -= reply_risk * 0.72
+			else:
+				var reply_risk: float = multi_opponent_reply_risk(color, outcome.board, next_opponent_order(color, team_match, player_count), 3, team_match, player_count)
+				score -= reply_risk * 0.72
 		ranked.append({"move": move, "score": score})
 	ranked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return float(a.score) > float(b.score)
