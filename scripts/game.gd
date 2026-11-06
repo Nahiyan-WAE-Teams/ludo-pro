@@ -1,6 +1,7 @@
 extends Node2D
 
 const R = preload("res://scripts/game_rules.gd")
+const LAN_SESSION_SCRIPT = preload("res://scripts/lan_session.gd")
 const BG := Color("#0b1118")
 const BG_2 := Color("#101a24")
 const PANEL := Color("#141f2a")
@@ -32,7 +33,12 @@ var pieces: Dictionary = {}
 var turn := 0
 var roll := 0
 var phase := "roll"
-var mode := "solo"
+var mode := "human_ai"
+var lan_session: Node
+var local_lan_seat := -1
+var lan_lobby_open := false
+var lan_status := "Host a room or join a player on your Wi-Fi network."
+var ip_input: LineEdit
 var difficulty := "balanced"
 var turns := 0
 var captures := 0
@@ -63,9 +69,108 @@ var ui_offset := Vector2.ZERO
 
 func _ready() -> void:
 	rng.randomize()
+	lan_session = LAN_SESSION_SCRIPT.new()
+	lan_session.name = "LanSession"
+	add_child(lan_session)
+	lan_session.session_status.connect(_on_lan_status)
+	lan_session.action_requested.connect(_on_lan_action)
+	lan_session.snapshot_received.connect(_on_lan_snapshot)
+	lan_session.roster_changed.connect(_on_lan_roster)
+	setup_lan_ip_input()
 	get_viewport().size_changed.connect(queue_redraw)
 	if not load_match():
 		new_match()
+
+func setup_lan_ip_input() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "LanInputLayer"
+	add_child(layer)
+	var root := Control.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(root)
+	ip_input = LineEdit.new()
+	ip_input.placeholder_text = "Host IP address, e.g. 192.168.1.10"
+	ip_input.text = "192.168.1.10"
+	ip_input.position = Vector2(490, 355)
+	ip_input.size = Vector2(300, 48)
+	ip_input.visible = false
+	ip_input.add_theme_font_size_override("font_size", 18)
+	ip_input.add_theme_color_override("font_color", IVORY)
+	ip_input.add_theme_color_override("font_placeholder_color", MUTED)
+	var input_style := StyleBoxFlat.new()
+	input_style.bg_color = Color("#0d151d")
+	input_style.border_color = GOLD.darkened(0.25)
+	input_style.set_border_width_all(1)
+	input_style.set_corner_radius_all(8)
+	ip_input.add_theme_stylebox_override("normal", input_style)
+	ip_input.add_theme_stylebox_override("focus", input_style)
+	root.add_child(ip_input)
+
+func _on_lan_status(message: String) -> void:
+	lan_status = message
+	queue_redraw()
+
+func _on_lan_roster(_seats: Dictionary) -> void:
+	local_lan_seat = int(lan_session.local_seat)
+	if lan_session.is_host():
+		publish_lan_state()
+		if is_ai_turn(turn):
+			wait_ai = 0.7 if phase == "roll" else 0.55
+	queue_redraw()
+
+func _on_lan_action(_peer_id: int, seat: int, action: String, payload: Dictionary) -> void:
+	if not lan_session.is_host() or seat != turn or champion != "":
+		return
+	if action == "roll" and phase == "roll" and not busy:
+		busy = true
+		die = rng.randi_range(1, 6)
+		rolling = 0.72
+		dice_spin = 0.0
+	elif action == "move" and phase == "move" and not busy:
+		var token_index := int(payload.get("token", -1))
+		for move in choices:
+			if int(move.token) == token_index:
+				commit_move(move)
+				break
+
+func _on_lan_snapshot(snapshot: Dictionary) -> void:
+	if snapshot.has("disconnected"):
+		busy = true
+		phase = "lan_disconnected"
+		return
+	if lan_session.is_host():
+		return
+	pieces = snapshot.get("pieces", pieces).duplicate(true)
+	turn = int(snapshot.get("turn", turn))
+	roll = int(snapshot.get("roll", roll))
+	die = int(snapshot.get("die", die))
+	phase = str(snapshot.get("phase", phase))
+	turns = int(snapshot.get("turns", turns))
+	captures = int(snapshot.get("captures", captures))
+	homes = int(snapshot.get("homes", homes))
+	sixes = int(snapshot.get("sixes", sixes))
+	var previous_champion := champion
+	champion = str(snapshot.get("champion", champion))
+	if champion != "" and previous_champion == "":
+		victory_time = 0.0
+		announce_victory(champion)
+		spawn_burst(O + Vector2(285, 285), GOLD, 44)
+	choices = snapshot.get("choices", []).duplicate(true)
+	if local_lan_seat >= 0:
+		lan_lobby_open = false
+		ip_input.visible = false
+	busy = false
+	queue_redraw()
+
+func publish_lan_state() -> void:
+	if mode != "lan" or not lan_session.is_host():
+		return
+	lan_session.publish_snapshot({
+		"pieces": pieces, "turn": turn, "roll": roll, "die": die,
+		"phase": phase, "turns": turns, "captures": captures,
+		"homes": homes, "sixes": sixes, "champion": champion,
+		"choices": choices
+	})
 
 func _process(delta: float) -> void:
 	pulse += delta
@@ -87,9 +192,9 @@ func _process(delta: float) -> void:
 	if wait_ai > 0.0:
 		wait_ai = maxf(0.0, wait_ai - delta)
 		if wait_ai <= 0.0:
-			if phase == "roll" and not is_human(turn):
+			if phase == "roll" and is_ai_turn(turn):
 				ai_begin_roll()
-			elif phase == "move" and not is_human(turn):
+			elif phase == "move" and is_ai_turn(turn):
 				ai_choose_move()
 	if banner_time > 0.0:
 		banner_time = maxf(0.0, banner_time - delta)
@@ -118,6 +223,8 @@ func _draw() -> void:
 		draw_banner()
 	if rules_open:
 		draw_rules()
+	if lan_lobby_open:
+		draw_lan_lobby()
 	if champion != "":
 		draw_victory()
 	draw_particles()
@@ -139,7 +246,7 @@ func draw_header() -> void:
 	draw_string(ThemeDB.fallback_font, Vector2(145, 33), "PRO", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, GOLD)
 	draw_string(ThemeDB.fallback_font, Vector2(88, 49), "THE ROYAL BOARD", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, MUTED)
 	draw_circle(Vector2(1070, 33), 4, Color("#69b18e"))
-	draw_string(ThemeDB.fallback_font, Vector2(1083, 37), "OFFLINE PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("#b4c1c6"))
+	draw_string(ThemeDB.fallback_font, Vector2(1083, 37), "LAN NETWORK" if mode == "lan" else "OFFLINE PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("#b4c1c6"))
 	draw_string(ThemeDB.fallback_font, Vector2(1198, 37), "v1.1", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, MUTED)
 
 func draw_board() -> void:
@@ -231,6 +338,27 @@ func draw_token(pos: Vector2, color: String, highlight: bool, index: int) -> voi
 	draw_circle(pos + Vector2(-3.5, -4), 2.8, Color(1, 1, 1, 0.78))
 	draw_string(ThemeDB.fallback_font, pos + Vector2(11, 4), str(index + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color("#fff8e8"))
 
+func draw_lan_lobby() -> void:
+	draw_rect(Rect2(0, 0, 1280, 720), Color(0.015, 0.025, 0.035, 0.88))
+	draw_panel(Rect2(330, 170, 620, 390), Color("#17242e"))
+	draw_string(ThemeDB.fallback_font, Vector2(390, 220), "LOCAL NETWORK MULTIPLAYER", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, GOLD)
+	draw_string(ThemeDB.fallback_font, Vector2(390, 265), "Play together over the same Wi-Fi", HORIZONTAL_ALIGNMENT_LEFT, -1, 25, IVORY)
+	draw_string(ThemeDB.fallback_font, Vector2(390, 295), "Host a room on one phone, then join from the others.", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, MUTED)
+	draw_round_rect(Rect2(420, 430, 190, 58), GOLD, 9)
+	draw_string(ThemeDB.fallback_font, Vector2(515, 465), "HOST GAME", HORIZONTAL_ALIGNMENT_CENTER, 180, 12, Color("#202a30"))
+	draw_round_rect(Rect2(670, 430, 190, 58), Color("#344653"), 9)
+	draw_string(ThemeDB.fallback_font, Vector2(765, 465), "JOIN GAME", HORIZONTAL_ALIGNMENT_CENTER, 180, 12, IVORY)
+	draw_string(ThemeDB.fallback_font, Vector2(640, 505), lan_status, HORIZONTAL_ALIGNMENT_CENTER, 540, 9, Color("#c3cdd2"))
+	draw_round_rect(Rect2(560, 525, 160, 38), Color("#263642"), 8)
+	draw_string(ThemeDB.fallback_font, Vector2(640, 549), "BACK", HORIZONTAL_ALIGNMENT_CENTER, 140, 10, IVORY)
+	var local_addresses: PackedStringArray = IP.get_local_addresses()
+	var lan_ip := "Find your phone's Wi-Fi IPv4 address in Android Wi-Fi settings."
+	for address in local_addresses:
+		if address.contains(".") and not address.begins_with("127.") and not address.begins_with("169.254."):
+			lan_ip = "HOST IP: %s   ·   PORT: 24680" % address
+			break
+	draw_string(ThemeDB.fallback_font, Vector2(640, 405), lan_ip, HORIZONTAL_ALIGNMENT_CENTER, 550, 9, GOLD)
+
 func draw_sidebar() -> void:
 	draw_panel(Rect2(693, 82, 562, 614), Color("#111b25"))
 	draw_string(ThemeDB.fallback_font, Vector2(724, 117), "ROYAL ARENA", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, GOLD)
@@ -246,7 +374,7 @@ func draw_sidebar() -> void:
 		draw_circle(Vector2(740, y + 22), 6, C[color])
 		draw_string(ThemeDB.fallback_font, Vector2(756, y + 19), N[color], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, IVORY)
 		draw_string(ThemeDB.fallback_font, Vector2(756, y + 32), PLAYER_META[color], HORIZONTAL_ALIGNMENT_LEFT, -1, 7, MUTED)
-		draw_string(ThemeDB.fallback_font, Vector2(1045, y + 27), "YOU" if is_human(i) else "CPU", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, GOLD if is_human(i) else MUTED)
+		draw_string(ThemeDB.fallback_font, Vector2(1045, y + 27), "LOCAL" if mode == "multiplayer" else ("YOU" if is_human(i) else ("LAN" if mode == "lan" and i in lan_session.seats.values() else "CPU")), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, GOLD if is_human(i) else MUTED)
 		var home_count := 0
 		for token in pieces[color]:
 			if int(token) == 57:
@@ -263,6 +391,10 @@ func draw_sidebar() -> void:
 		hint = "The strategist is thinking..."
 	if phase == "animating":
 		hint = "Moving across the board..."
+	if phase == "waiting":
+		hint = "Waiting for the host..."
+	if phase == "lan_disconnected":
+		hint = "LAN connection lost. Return to the lobby."
 	if champion != "":
 		hint = "A new champion has risen."
 	draw_string(ThemeDB.fallback_font, Vector2(720, 494), hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, MUTED)
@@ -278,10 +410,23 @@ func draw_sidebar() -> void:
 	draw_stat(Vector2(720, 620), "TURNS", str(turns))
 	draw_stat(Vector2(865, 620), "CAPTURES", str(captures))
 	draw_stat(Vector2(1034, 620), "HOME", str(homes))
-	draw_string(ThemeDB.fallback_font, Vector2(720, 657), "MODE  %s  ↻" % mode.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, GOLD)
-	draw_string(ThemeDB.fallback_font, Vector2(934, 657), "AI  %s  ↻" % difficulty.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, GOLD)
+	draw_round_rect(Rect2(718, 640, 195, 27), Color("#263642"), 6)
+	draw_string(ThemeDB.fallback_font, Vector2(730, 658), "MODE  %s  ↻" % mode_display_name(), HORIZONTAL_ALIGNMENT_LEFT, 180, 9, GOLD)
+	draw_round_rect(Rect2(925, 640, 195, 27), Color("#263642"), 6)
+	draw_string(ThemeDB.fallback_font, Vector2(937, 658), "AI  %s  ↻" % difficulty.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, 180, 9, GOLD)
 	draw_string(ThemeDB.fallback_font, Vector2(720, 679), "RULES", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, MUTED)
 	draw_string(ThemeDB.fallback_font, Vector2(1150, 679), "SAVED LOCALLY", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, MUTED)
+
+func mode_display_name() -> String:
+	match mode:
+		"human_ai":
+			return "HUMAN VS AI"
+		"multiplayer":
+			return "MULTIPLAYER"
+		"lan":
+			return "LAN PLAYERS"
+		_:
+			return mode.to_upper()
 
 func draw_stat(pos: Vector2, label: String, value: String) -> void:
 	draw_string(ThemeDB.fallback_font, pos, label, HORIZONTAL_ALIGNMENT_LEFT, -1, 7, MUTED)
@@ -359,13 +504,28 @@ func new_match() -> void:
 	queue_redraw()
 
 func human_count() -> int:
-	return 4 if mode == "local" else 2 if mode == "duo" else 1
+	return R.human_player_count(mode)
 
 func is_human(player: int) -> bool:
-	return player < human_count()
+	if mode == "lan":
+		return player == local_lan_seat and local_lan_seat >= 0
+	return R.is_human_seat(mode, player)
+
+func is_ai_turn(player: int) -> bool:
+	if mode != "lan":
+		return not is_human(player)
+	if not lan_session.is_host():
+		return false
+	return player not in lan_session.seats.values()
 
 func roll_dice() -> void:
 	if phase != "roll" or not is_human(turn) or busy or champion != "":
+		return
+	if mode == "lan" and not lan_session.is_host():
+		busy = true
+		phase = "waiting"
+		lan_session.request_action("roll")
+		queue_redraw()
 		return
 	busy = true
 	die = rng.randi_range(1, 6)
@@ -395,16 +555,24 @@ func finish_roll() -> void:
 		add_log("%s rolled %d. No legal move." % [N[R.COLORS[turn]], roll])
 		if roll != 6:
 			next_turn()
-		elif not is_human(turn):
+		elif is_ai_turn(turn):
 			wait_ai = 0.5
 	else:
 		phase = "move"
-		if not is_human(turn):
+		if is_ai_turn(turn):
 			wait_ai = 0.55
+	if mode == "lan":
+		publish_lan_state()
 	queue_redraw()
 
 func commit_move(move: Dictionary) -> void:
 	if busy or phase != "move":
+		return
+	if mode == "lan" and not lan_session.is_host():
+		busy = true
+		phase = "waiting"
+		lan_session.request_action("move", {"token": int(move.token)})
+		queue_redraw()
 		return
 	var color: String = R.COLORS[turn]
 	anim_data = {"color":color, "token":int(move.token), "from":int(move.from), "to":int(move.to)}
@@ -453,6 +621,8 @@ func finish_animation() -> void:
 		spawn_burst(Vector2(640, 355), C[color], 64)
 		announce_victory(color)
 		save_match()
+		if mode == "lan":
+			publish_lan_state()
 		queue_redraw()
 		return
 	if roll != 6 and not captured:
@@ -462,9 +632,11 @@ func finish_animation() -> void:
 		phase = "roll"
 		choices.clear()
 		busy = false
-		if not is_human(turn):
+		if is_ai_turn(turn):
 			wait_ai = 0.65
 	save_match()
+	if mode == "lan":
+		publish_lan_state()
 	queue_redraw()
 
 func next_turn() -> void:
@@ -473,8 +645,10 @@ func next_turn() -> void:
 	phase = "roll"
 	choices.clear()
 	busy = false
-	if not is_human(turn):
+	if is_ai_turn(turn):
 		wait_ai = 0.7
+	if mode == "lan":
+		publish_lan_state()
 	queue_redraw()
 
 func ai_choose_move() -> void:
@@ -548,7 +722,11 @@ func load_match() -> bool:
 			return false
 	turn = clampi(int(config.get_value("match", "turn", 0)), 0, 3)
 	roll = int(config.get_value("match", "roll", 0))
-	mode = str(config.get_value("match", "mode", "solo"))
+	mode = str(config.get_value("match", "mode", "human_ai"))
+	if mode == "lan" or mode == "solo" or mode == "duo":
+		mode = "human_ai"
+	elif mode == "local":
+		mode = "multiplayer"
 	difficulty = str(config.get_value("match", "difficulty", "balanced"))
 	turns = int(config.get_value("match", "turns", 0))
 	captures = int(config.get_value("match", "captures", 0))
@@ -616,6 +794,28 @@ func to_design_point(point: Vector2) -> Vector2:
 	return (point - ui_offset) / maxf(ui_scale, 0.001)
 
 func handle_tap(point: Vector2) -> void:
+	if lan_lobby_open:
+		if Rect2(420, 430, 190, 58).has_point(point):
+			var error: Error = lan_session.host_game()
+			if error == OK:
+				local_lan_seat = 0
+				lan_lobby_open = false
+				ip_input.visible = false
+				new_match()
+				publish_lan_state()
+			lan_status = "Hosting on port 24680. Other players enter this phone's Wi-Fi IP."
+			queue_redraw()
+		elif Rect2(670, 430, 190, 58).has_point(point):
+			var error: Error = lan_session.join_game(ip_input.text)
+			if error == OK:
+				phase = "waiting"
+				busy = true
+			queue_redraw()
+		elif Rect2(560, 525, 160, 38).has_point(point):
+			lan_lobby_open = false
+			ip_input.visible = false
+			queue_redraw()
+		return
 	if rules_open:
 		if Rect2(340, 535, 190, 48).has_point(point):
 			rules_open = false
@@ -623,26 +823,44 @@ func handle_tap(point: Vector2) -> void:
 		return
 	if champion != "":
 		if Rect2(520, 495, 240, 54).has_point(point):
+			if mode == "lan" and not lan_session.is_host():
+				return
 			new_match()
+			if mode == "lan":
+				publish_lan_state()
 		return
 	if Rect2(718, 513, 242, 68).has_point(point):
 		roll_dice()
 		queue_redraw()
 		return
 	if Rect2(976, 513, 252, 68).has_point(point):
+		if mode == "lan" and not lan_session.is_host():
+			return
 		new_match()
+		if mode == "lan":
+			publish_lan_state()
 		return
 	if Rect2(710, 642, 195, 25).has_point(point):
-		var modes := ["solo", "duo", "local"]
+		var modes := ["human_ai", "multiplayer", "lan"]
 		mode = modes[(modes.find(mode) + 1) % modes.size()]
-		new_match()
+		if mode == "lan":
+			lan_lobby_open = true
+			ip_input.visible = true
+		else:
+			if lan_session.is_active():
+				lan_session.disconnect_session()
+			local_lan_seat = -1
+			lan_lobby_open = false
+			ip_input.visible = false
+			new_match()
+		queue_redraw()
 		return
 	if Rect2(925, 642, 195, 25).has_point(point):
 		var levels := ["balanced", "tactical", "champion"]
 		difficulty = levels[(levels.find(difficulty) + 1) % levels.size()]
 		new_match()
 		return
-	if Rect2(710, 663, 120, 28).has_point(point):
+	if Rect2(710, 671, 120, 24).has_point(point):
 		rules_open = true
 		queue_redraw()
 		return
