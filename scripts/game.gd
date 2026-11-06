@@ -140,6 +140,7 @@ func _on_lan_snapshot(snapshot: Dictionary) -> void:
 	if snapshot.has("disconnected"):
 		busy = true
 		phase = "lan_disconnected"
+		queue_redraw()
 		return
 	if lan_session.is_host():
 		return
