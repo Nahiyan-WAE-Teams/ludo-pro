@@ -32,6 +32,14 @@ The three AI levels use a shared board evaluator with different risk tolerance:
 
 The evaluator accounts for exact track distance to enemy tokens, safe-square immunity, home-lane progress, token exposure, capture value, home completion and useful token formations. It is deterministic at Champion difficulty, so the strongest move is selected consistently for a given board and roll.
 
+### Champion opponent-turn search
+
+Champion mode now runs a three-opponent expectimax search after each candidate move. It models each of the next three opponents receiving a fair six-sided die roll, then choosing their strongest response. The AI averages those chance outcomes, values captures against leading opponents, and subtracts the resulting danger from its candidate move score. This is deeper than a static six-square threat check, while remaining bounded to three opponent turns so it stays practical on mobile hardware.
+
+### Victory announcement
+
+When a match is won, the game launches a full-screen animated congratulations ceremony, fireworks particles, a champion callout, and a short vibration. On Android devices with an installed native text-to-speech voice, it also speaks the winner's name and announces: "Congratulations, Ruby! You are the Ludo Pro champion!" The spoken name changes with the winning color. If device speech is unavailable, the visual announcement still plays.
+
 ## Gameplay
 - Four player colors and four tokens per player
 - Solo vs three AI, two local players plus two AI, or four local players
