@@ -860,7 +860,7 @@ func handle_tap(point: Vector2) -> void:
 		difficulty = levels[(levels.find(difficulty) + 1) % levels.size()]
 		new_match()
 		return
-	if Rect2(710, 663, 120, 28).has_point(point):
+	if Rect2(710, 671, 120, 24).has_point(point):
 		rules_open = true
 		queue_redraw()
 		return
