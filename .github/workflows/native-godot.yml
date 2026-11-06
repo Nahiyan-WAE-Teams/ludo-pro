@@ -2,9 +2,9 @@ name: Native Godot validation
 
 on:
   push:
-    branches: [native-godot, premium-ux-overhaul]
+    branches: [main, native-godot, premium-ux-overhaul]
   pull_request:
-    branches: [native-godot]
+    branches: [main, native-godot]
   workflow_dispatch:
 
 jobs:
