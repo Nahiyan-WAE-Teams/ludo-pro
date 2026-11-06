@@ -22,6 +22,16 @@ Run the rules checks:
 godot --headless --path . --script res://tests/test_rules.gd
 ```
 
+## Adaptive AI
+
+The three AI levels use a shared board evaluator with different risk tolerance:
+
+- **Balanced:** considers a wider set of close-scoring moves and varies its decisions.
+- **Tactical:** narrows choices to stronger moves and values safe squares, progress, captures and exposure.
+- **Champion:** evaluates the resulting board, checks opponent capture windows, prioritizes dangerous leaders, and searches the expected value of bonus turns across all six possible next dice rolls.
+
+The evaluator accounts for exact track distance to enemy tokens, safe-square immunity, home-lane progress, token exposure, capture value, home completion and useful token formations. It is deterministic at Champion difficulty, so the strongest move is selected consistently for a given board and roll.
+
 ## Gameplay
 - Four player colors and four tokens per player
 - Solo vs three AI, two local players plus two AI, or four local players
