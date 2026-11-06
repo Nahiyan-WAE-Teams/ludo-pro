@@ -44,6 +44,7 @@ func _initialize() -> void:
 		"blue":[-1, -1, -1, -1]
 	}
 	assert(RULES.is_team_winner(team_board, "red"))
+	assert(RULES.evaluate_position("red", team_board, true) > RULES.evaluate_position("red", team_board, false))
 	var teammate_board := {"red":[4,-1,-1,-1], "green":[-1,-1,-1,-1], "yellow":[31,-1,-1,-1], "blue":[-1,-1,-1,-1]}
 	var teammate_capture := RULES.apply_move("red", teammate_board, {"token":0,"from":4,"to":5,"kind":"move"}, true)
 	assert(teammate_capture.captured.is_empty())
@@ -59,6 +60,8 @@ func _initialize() -> void:
 		"blue":[-1, -1, -1, -1]
 	}
 	assert(RULES.is_blockade_at(blockade_board, 8, 4))
+	assert(not RULES.is_blockade_at(blockade_board, 8, 2)) # Inactive seats cannot create phantom blockades.
+	assert(RULES.legal_moves_for_board("red", blockade_board, 3, 2).size() == 1)
 	assert(RULES.legal_moves_for_board("red", blockade_board, 4, 4).is_empty())
 	assert(RULES.legal_moves_for_board("red", blockade_board, 3, 4).is_empty())
 	var blockade_escape := RULES.legal_moves_for_board("green", blockade_board, 1, 4)
