@@ -105,6 +105,8 @@ func _on_lan_roster(_seats: Dictionary) -> void:
 	local_lan_seat = int(lan_session.local_seat)
 	if lan_session.is_host():
 		publish_lan_state()
+		if is_ai_turn(turn):
+			wait_ai = 0.7 if phase == "roll" else 0.55
 	queue_redraw()
 
 func _on_lan_action(_peer_id: int, seat: int, action: String, payload: Dictionary) -> void:
@@ -399,8 +401,10 @@ func draw_sidebar() -> void:
 	draw_stat(Vector2(720, 620), "TURNS", str(turns))
 	draw_stat(Vector2(865, 620), "CAPTURES", str(captures))
 	draw_stat(Vector2(1034, 620), "HOME", str(homes))
-	draw_string(ThemeDB.fallback_font, Vector2(720, 657), "MODE  %s  ↻" % mode_display_name(), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, GOLD)
-	draw_string(ThemeDB.fallback_font, Vector2(934, 657), "AI  %s  ↻" % difficulty.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, GOLD)
+	draw_round_rect(Rect2(718, 640, 195, 27), Color("#263642"), 6)
+	draw_string(ThemeDB.fallback_font, Vector2(730, 658), "MODE  %s  ↻" % mode_display_name(), HORIZONTAL_ALIGNMENT_LEFT, 180, 9, GOLD)
+	draw_round_rect(Rect2(925, 640, 195, 27), Color("#263642"), 6)
+	draw_string(ThemeDB.fallback_font, Vector2(937, 658), "AI  %s  ↻" % difficulty.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, 180, 9, GOLD)
 	draw_string(ThemeDB.fallback_font, Vector2(720, 679), "RULES", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, MUTED)
 	draw_string(ThemeDB.fallback_font, Vector2(1150, 679), "SAVED LOCALLY", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, MUTED)
 
