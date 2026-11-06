@@ -23,7 +23,7 @@ func _initialize() -> void:
 		"yellow":[-1, -1, -1, -1],
 		"blue":[-1, -1, -1, -1]
 	}
-	board["green"][0] = 5
+	board["green"][0] = 44
 	var capture_move := {"token":0, "from":4, "to":5, "kind":"move"}
 	var capture_score: int = RULES.score_move("red", board, capture_move, 1)
 	assert(capture_score >= 900)
