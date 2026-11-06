@@ -800,12 +800,13 @@ func draw_rules() -> void:
 		"Capture opponents by landing on their square.",
 		"Safe squares protect tokens from being captured.",
 		"Enter your home lane and reach the center with an exact roll.",
+		"Two same-color tokens form a blockade that no token can pass.",
 		"A six or capture earns another turn. Three sixes in a row forfeit it.",
 		"Bring all four tokens home first to win the match."
 	]
 	for i in range(rules.size()):
-		draw_circle(Vector2(350, 253 + i * 39), 3, GOLD)
-		draw_string(ThemeDB.fallback_font, Vector2(367, 258 + i * 39), rules[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("#d0d9dd"))
+		draw_circle(Vector2(350, 253 + i * 34), 3, GOLD)
+		draw_string(ThemeDB.fallback_font, Vector2(367, 258 + i * 34), rules[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("#d0d9dd"))
 	draw_round_rect(Rect2(340, 535, 190, 48), GOLD, 9)
 	draw_string(ThemeDB.fallback_font, Vector2(365, 565), "BACK TO GAME", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("#202a30"))
 
