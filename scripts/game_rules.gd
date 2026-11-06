@@ -84,6 +84,34 @@ static func legal_moves(tokens: Array, roll: int) -> Array[Dictionary]:
 			result.append({"token": i, "from": pos, "to": pos + roll, "kind": "home" if pos + roll == 56 else "move"})
 	return result
 
+static func is_blockade_at(board: Dictionary, absolute_square: int, player_count: int = 4) -> bool:
+	for color in active_player_colors(player_count):
+		var occupants := 0
+		for token_value in board[color]:
+			var progress := int(token_value)
+			if progress >= 0 and progress < 52 and absolute(color, progress) == absolute_square:
+				occupants += 1
+				if occupants >= 2:
+					return true
+	return false
+
+static func legal_moves_for_board(color: String, board: Dictionary, roll: int, player_count: int = 4) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for move in legal_moves(board[color], roll):
+		var from_progress := int(move.from)
+		var to_progress := int(move.to)
+		var path_blocked := false
+		if to_progress < 52:
+			var first_step := 0 if from_progress == -1 else from_progress + 1
+			for progress in range(first_step, to_progress + 1):
+				var square := absolute(color, progress)
+				if is_blockade_at(board, square, player_count):
+					path_blocked = true
+					break
+		if not path_blocked:
+			result.append(move)
+	return result
+
 static func apply_move(color: String, board: Dictionary, move: Dictionary, team_match: bool = false, player_count: int = 4) -> Dictionary:
 	var next: Dictionary = board.duplicate(true)
 	var target: int = int(move.to)
@@ -203,7 +231,7 @@ static func score_move(color: String, all_tokens: Dictionary, move: Dictionary, 
 static func extra_turn_lookahead(color: String, board: Dictionary, team_match: bool = false, player_count: int = 4) -> float:
 	var expected := 0.0
 	for future_roll in range(1, 7):
-		var moves: Array[Dictionary] = legal_moves(board[color], future_roll)
+		var moves: Array[Dictionary] = legal_moves_for_board(color, board, future_roll, player_count)
 		var best := 0.0
 		for move in moves:
 			var outcome := apply_move(color, board, move, team_match, player_count)
@@ -229,7 +257,7 @@ static func multi_opponent_reply_risk(player: String, board: Dictionary, opponen
 	var remaining: Array = opponent_order.slice(1)
 	var expected := 0.0
 	for die_roll in range(1, 7):
-		var moves: Array[Dictionary] = legal_moves(board[opponent], die_roll)
+		var moves: Array[Dictionary] = legal_moves_for_board(opponent, board, die_roll, player_count)
 		var best_value := 0.0
 		for move in moves:
 			var outcome := apply_move(opponent, board, move, team_match, player_count)
