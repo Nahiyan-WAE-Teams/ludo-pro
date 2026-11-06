@@ -20,6 +20,18 @@ func _initialize() -> void:
 	assert(RULES.next_active_player(0, 2) == 2)
 	assert(RULES.next_active_player(2, 2) == 0)
 	assert(RULES.next_active_player(2, 3) == 0)
+
+	# Champion AI must not simulate seats that are inactive in 2P/3P games.
+	var ghost_board := {
+		"red":[10, -1, -1, -1],
+		"green":[47, -1, -1, -1], # Green is inactive in a 2-player match.
+		"yellow":[-1, -1, -1, -1],
+		"blue":[-1, -1, -1, -1]
+	}
+	assert(RULES.threat_count("red", 10, ghost_board, false, 2) == 0)
+	assert(RULES.next_opponent_order("red", false, 2) == ["yellow"])
+	assert(RULES.next_opponent_order("red", false, 3) == ["green", "yellow"])
+	assert(RULES.next_opponent_order("yellow", false, 2) == ["red"])
 	assert(RULES.human_player_count("multiplayer", 2) == 2)
 	assert(RULES.is_human_seat("human_ai", 0, -1, 2))
 	assert(not RULES.is_human_seat("human_ai", 2, -1, 2))
