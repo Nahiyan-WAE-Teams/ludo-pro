@@ -156,6 +156,41 @@ static func extra_turn_lookahead(color: String, board: Dictionary) -> float:
 		expected += best / 6.0
 	return expected
 
+static func reply_utility(player: String, opponent: String, before: Dictionary, after: Dictionary, captured: Array) -> float:
+	var player_gain: float = evaluate_position(player, after) - evaluate_position(player, before)
+	var opponent_gain: float = evaluate_position(opponent, after) - evaluate_position(opponent, before)
+	return opponent_gain * 1.15 - player_gain * 1.25 + float(captured.size()) * 42.0
+
+# Expectimax over the next three opponents. Each opponent observes the same board,
+# receives an unknown fair die roll, then chooses the response with the best outcome.
+static func multi_opponent_reply_risk(player: String, board: Dictionary, opponent_order: Array, depth: int = 3) -> float:
+	if depth <= 0 or opponent_order.is_empty():
+		return 0.0
+	var opponent: String = str(opponent_order[0])
+	var remaining: Array = opponent_order.slice(1)
+	var expected := 0.0
+	for die_roll in range(1, 7):
+		var moves: Array[Dictionary] = legal_moves(board[opponent], die_roll)
+		var best_value := 0.0
+		for move in moves:
+			var outcome := apply_move(opponent, board, move)
+			var immediate: float = reply_utility(player, opponent, board, outcome.board, outcome.captured)
+			var continuation: float = multi_opponent_reply_risk(player, outcome.board, remaining, depth - 1)
+			best_value = maxf(best_value, immediate + continuation)
+		expected += best_value / 6.0
+	return expected
+
+static func next_opponent_order(color: String) -> Array[String]:
+	var order: Array[String] = []
+	var start_index: int = COLORS.find(color)
+	for offset in range(1, 4):
+		order.append(COLORS[(start_index + offset) % COLORS.size()])
+	return order
+
+static func victory_announcement(color: String) -> String:
+	var names := {"red":"Ruby", "green":"Jade", "yellow":"Amber", "blue":"Sapphire"}
+	return "Congratulations, %s! You are the Ludo Pro champion!" % names.get(color, "Player")
+
 static func choose_ai_move(color: String, all_tokens: Dictionary, moves: Array[Dictionary], roll: int, difficulty: String) -> Dictionary:
 	if moves.is_empty():
 		return {}
@@ -164,8 +199,11 @@ static func choose_ai_move(color: String, all_tokens: Dictionary, moves: Array[D
 		var score: float = float(score_move(color, all_tokens, move, roll))
 		var outcome := apply_move(color, all_tokens, move)
 		# A capture or six grants another turn. Champion difficulty plans that bonus turn.
-		if difficulty == "champion" and (roll == 6 or not outcome.captured.is_empty()):
-			score += extra_turn_lookahead(color, outcome.board) * 5.0
+		if difficulty == "champion":
+			if roll == 6 or not outcome.captured.is_empty():
+				score += extra_turn_lookahead(color, outcome.board) * 5.0
+			var reply_risk: float = multi_opponent_reply_risk(color, outcome.board, next_opponent_order(color), 3)
+			score -= reply_risk * 0.72
 		ranked.append({"move": move, "score": score})
 	ranked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return float(a.score) > float(b.score)
