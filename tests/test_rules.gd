@@ -123,6 +123,17 @@ func _initialize() -> void:
 	assert(outcome.board["red"][0] == 5)
 	assert(board["green"][0] == 44)
 
+	# Safe squares also prevent capture during the canonical move resolution.
+	var safe_capture_board := {
+		"red":[7, -1, -1, -1],
+		"green":[47, -1, -1, -1],
+		"yellow":[-1, -1, -1, -1],
+		"blue":[-1, -1, -1, -1]
+	}
+	var safe_landing := RULES.apply_move("red", safe_capture_board, {"token":0,"from":7,"to":8,"kind":"move"})
+	assert(safe_landing.captured.is_empty())
+	assert(safe_landing.board["green"][0] == 47)
+
 	# Safe squares are immune to threat calculations.
 	assert(RULES.threat_count("red", 5, board) > 0)
 	assert(RULES.threat_count("red", 8, board) == 0)
