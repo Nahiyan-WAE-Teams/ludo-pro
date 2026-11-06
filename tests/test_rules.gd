@@ -53,6 +53,16 @@ func _initialize() -> void:
 	assert(not RULES.is_team_winner(team_board, "green"))
 	assert(RULES.team_victory_announcement("red").contains("Ruby & Amber"))
 
+	# Turn-state helpers share the live game's six/bonus rules with Champion search.
+	assert(RULES.next_six_streak(6, 0) == 1)
+	assert(RULES.next_six_streak(6, 1) == 2)
+	assert(RULES.is_forfeited_third_six(6, 2))
+	assert(not RULES.is_forfeited_third_six(5, 2))
+	assert(RULES.next_six_streak(3, 2) == 0)
+	assert(RULES.earns_bonus_turn(6, false))
+	assert(RULES.earns_bonus_turn(4, true))
+	assert(not RULES.earns_bonus_turn(4, false))
+
 	# Classic blockade rules: two same-color tokens block crossing and landing.
 	var blockade_board := {
 		"red":[5, -1, -1, -1],
