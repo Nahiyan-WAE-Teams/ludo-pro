@@ -99,7 +99,7 @@ func _on_peer_connected(peer_id: int) -> void:
 		peer.disconnect_peer(peer_id)
 		return
 	seats[peer_id] = assigned
-	receive_roster.rpc_id(peer_id, seats.duplicate(true))
+	receive_roster.rpc(seats.duplicate(true))
 	roster_changed.emit(seats.duplicate(true))
 	session_status.emit("Player %d joined the LAN room." % (assigned + 1))
 
@@ -107,6 +107,7 @@ func _on_peer_disconnected(peer_id: int) -> void:
 	if is_host() and seats.has(peer_id):
 		var departed: int = int(seats[peer_id])
 		seats.erase(peer_id)
+		receive_roster.rpc(seats.duplicate(true))
 		roster_changed.emit(seats.duplicate(true))
 		session_status.emit("Player %d disconnected." % (departed + 1))
 
