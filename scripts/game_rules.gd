@@ -84,6 +84,15 @@ static func legal_moves(tokens: Array, roll: int) -> Array[Dictionary]:
 			result.append({"token": i, "from": pos, "to": pos + roll, "kind": "home" if pos + roll == 56 else "move"})
 	return result
 
+static func is_forfeited_third_six(roll: int, consecutive_sixes: int) -> bool:
+	return roll == 6 and consecutive_sixes >= 2
+
+static func next_six_streak(roll: int, consecutive_sixes: int) -> int:
+	return consecutive_sixes + 1 if roll == 6 else 0
+
+static func earns_bonus_turn(roll: int, captured: bool) -> bool:
+	return roll == 6 or captured
+
 static func is_blockade_at(board: Dictionary, absolute_square: int, player_count: int = 4) -> bool:
 	for color in active_player_colors(player_count):
 		var occupants := 0
@@ -267,13 +276,13 @@ static func multi_opponent_reply_risk(player: String, board: Dictionary, opponen
 	var expected := 0.0
 	for die_roll in range(1, 7):
 		# Three consecutive sixes forfeit the turn before any move is made.
-		if die_roll == 6 and consecutive_sixes >= 2:
+		if is_forfeited_third_six(die_roll, consecutive_sixes):
 			expected += multi_opponent_reply_risk(player, board, remaining, depth - 1, team_match, player_count, 0) / 6.0
 			continue
 		var moves: Array[Dictionary] = legal_moves_for_board(opponent, board, die_roll, player_count)
 		var best_value := INF if is_teammate else -INF
 		if moves.is_empty():
-			var next_streak := consecutive_sixes + 1 if die_roll == 6 else 0
+			var next_streak := next_six_streak(die_roll, consecutive_sixes)
 			var continuation_order: Array = opponent_order if die_roll == 6 else remaining
 			best_value = multi_opponent_reply_risk(player, board, continuation_order, depth - 1, team_match, player_count, next_streak)
 		else:
@@ -284,7 +293,7 @@ static func multi_opponent_reply_risk(player: String, board: Dictionary, opponen
 					immediate = -(evaluate_position(player, outcome.board, true, player_count) - evaluate_position(player, board, true, player_count))
 				else:
 					immediate = reply_utility(player, opponent, board, outcome.board, outcome.captured, team_match, player_count)
-				var earns_bonus := die_roll == 6 or not outcome.captured.is_empty()
+				var earns_bonus := earns_bonus_turn(die_roll, not outcome.captured.is_empty())
 				var next_streak := consecutive_sixes + 1 if die_roll == 6 else 0
 				var continuation_order: Array = opponent_order if earns_bonus else remaining
 				var continuation: float = multi_opponent_reply_risk(player, outcome.board, continuation_order, depth - 1, team_match, player_count, next_streak)
@@ -320,7 +329,7 @@ static func choose_ai_move(color: String, all_tokens: Dictionary, moves: Array[D
 		var outcome := apply_move(color, all_tokens, move, team_match, player_count)
 		# A capture or six grants another turn. Champion difficulty plans that bonus turn.
 		if difficulty == "champion":
-			var earns_bonus := roll == 6 or not outcome.captured.is_empty()
+			var earns_bonus := earns_bonus_turn(roll, not outcome.captured.is_empty())
 			if earns_bonus:
 				score += extra_turn_lookahead(color, outcome.board, team_match, player_count) * 5.0
 			else:
