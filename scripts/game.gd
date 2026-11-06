@@ -641,7 +641,7 @@ func finish_animation() -> void:
 		var absolute_target: int = R.absolute(color, target)
 		if absolute_target not in R.SAFE:
 			for enemy in R.COLORS:
-				if enemy == color:
+				if enemy == color or (team_match and enemy in R.team_colors(color)):
 					continue
 				for enemy_index in range(4):
 					var enemy_pos: int = pieces[enemy][enemy_index]
@@ -704,7 +704,7 @@ func ai_choose_move() -> void:
 	if champion != "" or is_human(turn) or phase != "move" or busy:
 		return
 	var color: String = R.COLORS[turn]
-	var move := R.choose_ai_move(color, pieces, choices, roll, difficulty)
+	var move := R.choose_ai_move(color, pieces, choices, roll, difficulty, team_match)
 	if not move.is_empty():
 		commit_move(move)
 
@@ -876,31 +876,8 @@ func handle_tap(point: Vector2) -> void:
 			new_match()
 			queue_redraw()
 		return
-	if rules_open:
-		if Rect2(340, 535, 190, 48).has_point(point):
-			rules_open = false
-			queue_redraw()
-		return
-	if champion != "":
-		if Rect2(520, 495, 240, 54).has_point(point):
-			if mode == "lan" and not lan_session.is_host():
-				return
-			new_match()
-			if mode == "lan":
-				publish_lan_state()
-		return
-	if Rect2(718, 513, 242, 68).has_point(point):
-		roll_dice()
-		queue_redraw()
-		return
-	if Rect2(976, 513, 252, 68).has_point(point):
-		if mode == "lan" and not lan_session.is_host():
-			return
-		new_match()
-		if mode == "lan":
-			publish_lan_state()
-		return
 	if setup_open:
+if setup_open:
 		if Rect2(350, 246, 175, 48).has_point(point):
 			mode = "human_ai"
 		elif Rect2(545, 246, 175, 48).has_point(point):
@@ -933,6 +910,31 @@ func handle_tap(point: Vector2) -> void:
 			setup_open = false
 		queue_redraw()
 		return
+	if rules_open:
+		if Rect2(340, 535, 190, 48).has_point(point):
+			rules_open = false
+			queue_redraw()
+		return
+	if champion != "":
+		if Rect2(520, 495, 240, 54).has_point(point):
+			if mode == "lan" and not lan_session.is_host():
+				return
+			new_match()
+			if mode == "lan":
+				publish_lan_state()
+		return
+	if Rect2(718, 513, 242, 68).has_point(point):
+		roll_dice()
+		queue_redraw()
+		return
+	if Rect2(976, 513, 252, 68).has_point(point):
+		if mode == "lan" and not lan_session.is_host():
+			return
+		new_match()
+		if mode == "lan":
+			publish_lan_state()
+		return
+
 	if Rect2(710, 642, 195, 25).has_point(point):
 		setup_open = true
 		queue_redraw()
