@@ -263,6 +263,7 @@ static func multi_opponent_reply_risk(player: String, board: Dictionary, opponen
 		return 0.0
 	var opponent: String = str(opponent_order[0])
 	var remaining: Array = opponent_order.slice(1)
+	var is_teammate := team_match and opponent in team_colors(player)
 	var expected := 0.0
 	for die_roll in range(1, 7):
 		# Three consecutive sixes forfeit the turn before any move is made.
@@ -270,7 +271,7 @@ static func multi_opponent_reply_risk(player: String, board: Dictionary, opponen
 			expected += multi_opponent_reply_risk(player, board, remaining, depth - 1, team_match, player_count, 0) / 6.0
 			continue
 		var moves: Array[Dictionary] = legal_moves_for_board(opponent, board, die_roll, player_count)
-		var best_value := -INF
+		var best_value := INF if is_teammate else -INF
 		if moves.is_empty():
 			var next_streak := consecutive_sixes + 1 if die_roll == 6 else 0
 			var continuation_order: Array = opponent_order if die_roll == 6 else remaining
@@ -278,13 +279,20 @@ static func multi_opponent_reply_risk(player: String, board: Dictionary, opponen
 		else:
 			for move in moves:
 				var outcome := apply_move(opponent, board, move, team_match, player_count)
-				var immediate: float = reply_utility(player, opponent, board, outcome.board, outcome.captured, team_match, player_count)
+				var immediate: float
+				if is_teammate:
+					immediate = -(evaluate_position(player, outcome.board, true, player_count) - evaluate_position(player, board, true, player_count))
+				else:
+					immediate = reply_utility(player, opponent, board, outcome.board, outcome.captured, team_match, player_count)
 				var earns_bonus := die_roll == 6 or not outcome.captured.is_empty()
 				var next_streak := consecutive_sixes + 1 if die_roll == 6 else 0
 				var continuation_order: Array = opponent_order if earns_bonus else remaining
 				var continuation: float = multi_opponent_reply_risk(player, outcome.board, continuation_order, depth - 1, team_match, player_count, next_streak)
-				best_value = maxf(best_value, immediate + continuation)
-		expected += maxf(0.0, best_value) / 6.0
+				if is_teammate:
+					best_value = minf(best_value, immediate + continuation)
+				else:
+					best_value = maxf(best_value, immediate + continuation)
+		expected += (0.0 if best_value == INF or best_value == -INF else best_value) / 6.0
 	return expected
 
 static func next_opponent_order(color: String, team_match: bool = false, player_count: int = 4) -> Array[String]:
@@ -292,13 +300,11 @@ static func next_opponent_order(color: String, team_match: bool = false, player_
 	var active := active_player_indices(player_count)
 	var start_index: int = COLORS.find(color)
 	for offset in range(1, COLORS.size()):
-		var opponent_index: int = (start_index + offset) % COLORS.size()
-		if opponent_index not in active:
+		var next_index: int = (start_index + offset) % COLORS.size()
+		if next_index not in active:
 			continue
-		var opponent: String = COLORS[opponent_index]
-		if team_match and opponent in team_colors(color):
-			continue
-		order.append(opponent)
+		# Include teammates too: their intervening moves can change the board.
+		order.append(COLORS[next_index])
 	return order
 
 static func victory_announcement(color: String) -> String:
