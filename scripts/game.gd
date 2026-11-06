@@ -135,8 +135,16 @@ func _on_lan_snapshot(snapshot: Dictionary) -> void:
 	captures = int(snapshot.get("captures", captures))
 	homes = int(snapshot.get("homes", homes))
 	sixes = int(snapshot.get("sixes", sixes))
+	var previous_champion := champion
 	champion = str(snapshot.get("champion", champion))
+	if champion != "" and previous_champion == "":
+		victory_time = 0.0
+		announce_victory(champion)
+		spawn_burst(O + Vector2(285, 285), GOLD, 44)
 	choices = snapshot.get("choices", []).duplicate(true)
+	if local_lan_seat >= 0:
+		lan_lobby_open = false
+		ip_input.visible = false
 	busy = false
 	queue_redraw()
 
@@ -315,6 +323,27 @@ func draw_token(pos: Vector2, color: String, highlight: bool, index: int) -> voi
 	draw_arc(pos, 10.5, 0, TAU, 48, Color("#fff5df"), 1.5, true)
 	draw_circle(pos + Vector2(-3.5, -4), 2.8, Color(1, 1, 1, 0.78))
 	draw_string(ThemeDB.fallback_font, pos + Vector2(11, 4), str(index + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color("#fff8e8"))
+
+func draw_lan_lobby() -> void:
+	draw_rect(Rect2(0, 0, 1280, 720), Color(0.015, 0.025, 0.035, 0.88))
+	draw_panel(Rect2(330, 170, 620, 390), Color("#17242e"))
+	draw_string(ThemeDB.fallback_font, Vector2(390, 220), "LOCAL NETWORK MULTIPLAYER", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, GOLD)
+	draw_string(ThemeDB.fallback_font, Vector2(390, 265), "Play together over the same Wi-Fi", HORIZONTAL_ALIGNMENT_LEFT, -1, 25, IVORY)
+	draw_string(ThemeDB.fallback_font, Vector2(390, 295), "Host a room on one phone, then join from the others.", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, MUTED)
+	draw_round_rect(Rect2(420, 430, 190, 58), GOLD, 9)
+	draw_string(ThemeDB.fallback_font, Vector2(515, 465), "HOST GAME", HORIZONTAL_ALIGNMENT_CENTER, 180, 12, Color("#202a30"))
+	draw_round_rect(Rect2(670, 430, 190, 58), Color("#344653"), 9)
+	draw_string(ThemeDB.fallback_font, Vector2(765, 465), "JOIN GAME", HORIZONTAL_ALIGNMENT_CENTER, 180, 12, IVORY)
+	draw_string(ThemeDB.fallback_font, Vector2(640, 515), lan_status, HORIZONTAL_ALIGNMENT_CENTER, 540, 9, Color("#c3cdd2"))
+	draw_round_rect(Rect2(560, 520, 160, 48), Color("#263642"), 8)
+	draw_string(ThemeDB.fallback_font, Vector2(640, 550), "BACK", HORIZONTAL_ALIGNMENT_CENTER, 140, 10, IVORY)
+	var local_addresses: PackedStringArray = IP.get_local_addresses()
+	var lan_ip := "Find your phone's Wi-Fi IPv4 address in Android Wi-Fi settings."
+	for address in local_addresses:
+		if address.contains(".") and not address.begins_with("127.") and not address.begins_with("169.254."):
+			lan_ip = "HOST IP: %s   ·   PORT: 24680" % address
+			break
+	draw_string(ThemeDB.fallback_font, Vector2(640, 405), lan_ip, HORIZONTAL_ALIGNMENT_CENTER, 550, 9, GOLD)
 
 func draw_sidebar() -> void:
 	draw_panel(Rect2(693, 82, 562, 614), Color("#111b25"))
@@ -499,7 +528,7 @@ func finish_roll() -> void:
 		add_log("%s rolled %d. No legal move." % [N[R.COLORS[turn]], roll])
 		if roll != 6:
 			next_turn()
-		elif not is_human(turn):
+		elif is_ai_turn(turn):
 			wait_ai = 0.5
 	else:
 		phase = "move"
@@ -574,7 +603,7 @@ func finish_animation() -> void:
 		phase = "roll"
 		choices.clear()
 		busy = false
-		if not is_human(turn):
+		if is_ai_turn(turn):
 			wait_ai = 0.65
 	save_match()
 	if mode == "lan":
@@ -739,6 +768,8 @@ func handle_tap(point: Vector2) -> void:
 			var error: Error = lan_session.host_game()
 			if error == OK:
 				local_lan_seat = 0
+				lan_lobby_open = false
+				ip_input.visible = false
 				new_match()
 				publish_lan_state()
 			lan_status = "Hosting on port 24680. Other players enter this phone's Wi-Fi IP."
@@ -768,7 +799,11 @@ func handle_tap(point: Vector2) -> void:
 		queue_redraw()
 		return
 	if Rect2(976, 513, 252, 68).has_point(point):
+		if mode == "lan" and not lan_session.is_host():
+			return
 		new_match()
+		if mode == "lan":
+			publish_lan_state()
 		return
 	if Rect2(710, 642, 195, 25).has_point(point):
 		var modes := ["human_ai", "multiplayer", "lan"]
@@ -777,6 +812,9 @@ func handle_tap(point: Vector2) -> void:
 			lan_lobby_open = true
 			ip_input.visible = true
 		else:
+			if lan_session.is_active():
+				lan_session.disconnect_session()
+			local_lan_seat = -1
 			lan_lobby_open = false
 			ip_input.visible = false
 			new_match()
