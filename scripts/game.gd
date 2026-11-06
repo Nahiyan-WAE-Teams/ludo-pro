@@ -892,8 +892,8 @@ func handle_tap(point: Vector2) -> void:
 				lan_lobby_open = true
 				ip_input.visible = true
 			else:
-				if lan_session.is_active():
-					lan_session.disconnect_session()
+				# Always clear a stale ENet peer, including after an async disconnect.
+				lan_session.disconnect_session()
 				local_lan_seat = -1
 				lan_lobby_open = false
 				ip_input.visible = false
