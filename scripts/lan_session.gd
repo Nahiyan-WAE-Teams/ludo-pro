@@ -13,6 +13,18 @@ var peer: ENetMultiplayerPeer
 var seats: Dictionary = {}
 var local_seat := -1
 var connected := false
+var seat_limit := MAX_PLAYERS
+var active_seats: Array[int] = [0, 1, 2, 3]
+
+func configure_player_limit(count: int) -> void:
+	seat_limit = clampi(count, 2, MAX_PLAYERS)
+	match seat_limit:
+		2:
+			active_seats = [0, 2]
+		3:
+			active_seats = [0, 1, 2]
+		_:
+			active_seats = [0, 1, 2, 3]
 
 func host_game(port: int = PORT) -> Error:
 	disconnect_session()
@@ -91,7 +103,7 @@ func _on_peer_connected(peer_id: int) -> void:
 		return
 	var used: Array = seats.values()
 	var assigned := -1
-	for candidate in range(MAX_PLAYERS):
+	for candidate in active_seats:
 		if candidate not in used:
 			assigned = candidate
 			break

@@ -34,6 +34,9 @@ var turn := 0
 var roll := 0
 var phase := "roll"
 var mode := "human_ai"
+var player_count := 4
+var team_match := false
+var setup_open := false
 var lan_session: Node
 var local_lan_seat := -1
 var lan_lobby_open := false
@@ -145,6 +148,8 @@ func _on_lan_snapshot(snapshot: Dictionary) -> void:
 	roll = int(snapshot.get("roll", roll))
 	die = int(snapshot.get("die", die))
 	phase = str(snapshot.get("phase", phase))
+	player_count = clampi(int(snapshot.get("player_count", player_count)), 2, 4)
+	team_match = bool(snapshot.get("team_match", team_match))
 	turns = int(snapshot.get("turns", turns))
 	captures = int(snapshot.get("captures", captures))
 	homes = int(snapshot.get("homes", homes))
@@ -167,7 +172,8 @@ func publish_lan_state() -> void:
 		return
 	lan_session.publish_snapshot({
 		"pieces": pieces, "turn": turn, "roll": roll, "die": die,
-		"phase": phase, "turns": turns, "captures": captures,
+		"phase": phase, "player_count": player_count, "team_match": team_match,
+		"turns": turns, "captures": captures,
 		"homes": homes, "sixes": sixes, "champion": champion,
 		"choices": choices
 	})
@@ -225,6 +231,8 @@ func _draw() -> void:
 		draw_rules()
 	if lan_lobby_open:
 		draw_lan_lobby()
+	if setup_open:
+		draw_setup_overlay()
 	if champion != "":
 		draw_victory()
 	draw_particles()
@@ -338,6 +346,35 @@ func draw_token(pos: Vector2, color: String, highlight: bool, index: int) -> voi
 	draw_circle(pos + Vector2(-3.5, -4), 2.8, Color(1, 1, 1, 0.78))
 	draw_string(ThemeDB.fallback_font, pos + Vector2(11, 4), str(index + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 7, Color("#fff8e8"))
 
+func draw_setup_overlay() -> void:
+	draw_rect(Rect2(0, 0, 1280, 720), Color(0.015, 0.025, 0.035, 0.88))
+	draw_panel(Rect2(290, 112, 700, 500), Color("#17242e"))
+	draw_string(ThemeDB.fallback_font, Vector2(350, 158), "MATCH CONFIGURATION", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, GOLD)
+	draw_string(ThemeDB.fallback_font, Vector2(350, 202), "Choose your arena", HORIZONTAL_ALIGNMENT_LEFT, -1, 27, IVORY)
+	draw_string(ThemeDB.fallback_font, Vector2(350, 230), "GAME MODE", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, MUTED)
+	var mode_options := [{"id":"human_ai","label":"VS AI"},{"id":"multiplayer","label":"LOCAL"},{"id":"lan","label":"LAN"}]
+	for i in range(mode_options.size()):
+		var rect := Rect2(350 + i * 195, 246, 175, 48)
+		var selected := mode == str(mode_options[i].id)
+		draw_round_rect(rect, GOLD if selected else Color("#263642"), 8)
+		draw_string(ThemeDB.fallback_font, rect.position + Vector2(0, 29), str(mode_options[i].label), HORIZONTAL_ALIGNMENT_CENTER, 175, 11, Color("#202a30") if selected else IVORY)
+	draw_string(ThemeDB.fallback_font, Vector2(350, 333), "PLAYER COUNT", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, MUTED)
+	for i in range(3):
+		var count := i + 2
+		var rect := Rect2(350 + i * 195, 348, 175, 48)
+		var selected := player_count == count
+		var enabled := not team_match or count == 4
+		draw_round_rect(rect, GOLD if selected else Color("#263642") if enabled else Color("#202a30"), 8)
+		draw_string(ThemeDB.fallback_font, rect.position + Vector2(0, 29), "%d PLAYERS" % count, HORIZONTAL_ALIGNMENT_CENTER, 175, 10, Color("#202a30") if selected else (IVORY if enabled else MUTED))
+	draw_round_rect(Rect2(350, 422, 560, 48), Color("#263642") if player_count == 4 else Color("#202a30"), 8)
+	draw_round_rect(Rect2(365, 435, 20, 20), GOLD if team_match else Color("#0d151d"), 4)
+	draw_string(ThemeDB.fallback_font, Vector2(399, 444), "TEAM MATCH  ·  RED + YELLOW vs GREEN + BLUE", HORIZONTAL_ALIGNMENT_LEFT, 490, 10, IVORY if player_count == 4 else MUTED)
+	draw_string(ThemeDB.fallback_font, Vector2(350, 490), "Team Match uses four seats and both teammates must bring all tokens home.", HORIZONTAL_ALIGNMENT_LEFT, 560, 9, MUTED)
+	draw_round_rect(Rect2(445, 525, 180, 52), GOLD, 9)
+	draw_string(ThemeDB.fallback_font, Vector2(535, 557), "START MATCH", HORIZONTAL_ALIGNMENT_CENTER, 180, 11, Color("#202a30"))
+	draw_round_rect(Rect2(655, 525, 180, 52), Color("#263642"), 9)
+	draw_string(ThemeDB.fallback_font, Vector2(745, 557), "CANCEL", HORIZONTAL_ALIGNMENT_CENTER, 180, 11, IVORY)
+
 func draw_lan_lobby() -> void:
 	draw_rect(Rect2(0, 0, 1280, 720), Color(0.015, 0.025, 0.035, 0.88))
 	draw_panel(Rect2(330, 170, 620, 390), Color("#17242e"))
@@ -374,7 +411,9 @@ func draw_sidebar() -> void:
 		draw_circle(Vector2(740, y + 22), 6, C[color])
 		draw_string(ThemeDB.fallback_font, Vector2(756, y + 19), N[color], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, IVORY)
 		draw_string(ThemeDB.fallback_font, Vector2(756, y + 32), PLAYER_META[color], HORIZONTAL_ALIGNMENT_LEFT, -1, 7, MUTED)
-		draw_string(ThemeDB.fallback_font, Vector2(1045, y + 27), "LOCAL" if mode == "multiplayer" else ("YOU" if is_human(i) else ("LAN" if mode == "lan" and i in lan_session.seats.values() else "CPU")), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, GOLD if is_human(i) else MUTED)
+		var active_seat := i in R.active_player_indices(player_count)
+		var seat_label := "OFF" if not active_seat else ("LOCAL" if mode == "multiplayer" else ("YOU" if is_human(i) else ("LAN" if mode == "lan" and i in lan_session.seats.values() else "CPU")))
+		draw_string(ThemeDB.fallback_font, Vector2(1045, y + 27), seat_label, HORIZONTAL_ALIGNMENT_LEFT, -1, 8, GOLD if is_human(i) else (MUTED if not active_seat else Color("#aab4ba")))
 		var home_count := 0
 		for token in pieces[color]:
 			if int(token) == 57:
@@ -411,7 +450,7 @@ func draw_sidebar() -> void:
 	draw_stat(Vector2(865, 620), "CAPTURES", str(captures))
 	draw_stat(Vector2(1034, 620), "HOME", str(homes))
 	draw_round_rect(Rect2(718, 640, 195, 27), Color("#263642"), 6)
-	draw_string(ThemeDB.fallback_font, Vector2(730, 658), "MODE  %s  ↻" % mode_display_name(), HORIZONTAL_ALIGNMENT_LEFT, 180, 9, GOLD)
+	draw_string(ThemeDB.fallback_font, Vector2(730, 658), "SETUP  %s · %dP%s" % [mode_display_name(), player_count, " 2v2" if team_match else ""], HORIZONTAL_ALIGNMENT_LEFT, 180, 8, GOLD)
 	draw_round_rect(Rect2(925, 640, 195, 27), Color("#263642"), 6)
 	draw_string(ThemeDB.fallback_font, Vector2(937, 658), "AI  %s  ↻" % difficulty.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, 180, 9, GOLD)
 	draw_string(ThemeDB.fallback_font, Vector2(720, 679), "RULES", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, MUTED)
@@ -481,8 +520,11 @@ func token_is_legal(index: int) -> bool:
 	return false
 
 func new_match() -> void:
+	player_count = clampi(player_count, 2, 4)
+	if team_match:
+		player_count = 4
 	pieces = {"red":[-1,-1,-1,-1], "green":[-1,-1,-1,-1], "yellow":[-1,-1,-1,-1], "blue":[-1,-1,-1,-1]}
-	turn = 0
+	turn = R.active_player_indices(player_count)[0]
 	roll = 0
 	phase = "roll"
 	turns = 0
@@ -504,14 +546,21 @@ func new_match() -> void:
 	queue_redraw()
 
 func human_count() -> int:
-	return R.human_player_count(mode)
+	return R.human_player_count(mode, player_count)
+
+func is_active_player(player: int) -> bool:
+	return player in R.active_player_indices(player_count)
 
 func is_human(player: int) -> bool:
+	if not is_active_player(player):
+		return false
 	if mode == "lan":
 		return player == local_lan_seat and local_lan_seat >= 0
-	return R.is_human_seat(mode, player)
+	return R.is_human_seat(mode, player, -1, player_count)
 
 func is_ai_turn(player: int) -> bool:
+	if not is_active_player(player):
+		return false
 	if mode != "lan":
 		return not is_human(player)
 	if not lan_session.is_host():
@@ -592,7 +641,7 @@ func finish_animation() -> void:
 		var absolute_target: int = R.absolute(color, target)
 		if absolute_target not in R.SAFE:
 			for enemy in R.COLORS:
-				if enemy == color:
+				if enemy == color or (team_match and enemy in R.team_colors(color)):
 					continue
 				for enemy_index in range(4):
 					var enemy_pos: int = pieces[enemy][enemy_index]
@@ -611,7 +660,7 @@ func finish_animation() -> void:
 		show_banner("NICE MOVE", C[color])
 	turns += 1
 	add_log("%s moved token %d%s" % [N[color], index + 1, " · CAPTURE" if captured else ""])
-	if R.is_winner(pieces[color]):
+	if (team_match and R.is_team_winner(pieces, color)) or (not team_match and R.is_winner(pieces[color])):
 		champion = color
 		phase = "won"
 		busy = false
@@ -640,7 +689,7 @@ func finish_animation() -> void:
 	queue_redraw()
 
 func next_turn() -> void:
-	turn = (turn + 1) % 4
+	turn = R.next_active_player(turn, player_count)
 	roll = 0
 	phase = "roll"
 	choices.clear()
@@ -655,13 +704,13 @@ func ai_choose_move() -> void:
 	if champion != "" or is_human(turn) or phase != "move" or busy:
 		return
 	var color: String = R.COLORS[turn]
-	var move := R.choose_ai_move(color, pieces, choices, roll, difficulty)
+	var move := R.choose_ai_move(color, pieces, choices, roll, difficulty, team_match)
 	if not move.is_empty():
 		commit_move(move)
 
 func announce_victory(color: String) -> void:
-	var announcement: String = R.victory_announcement(color)
-	banner_text = "CONGRATULATIONS, %s!" % N[color]
+	var announcement: String = R.team_victory_announcement(color) if team_match else R.victory_announcement(color)
+	banner_text = "TEAM VICTORY!" if team_match else "CONGRATULATIONS, %s!" % N[color]
 	banner_color = GOLD
 	banner_time = 3.2
 	victory_announced = true
@@ -703,6 +752,8 @@ func save_match() -> void:
 	config.set_value("match", "turn", turn)
 	config.set_value("match", "roll", roll)
 	config.set_value("match", "mode", mode)
+	config.set_value("match", "player_count", player_count)
+	config.set_value("match", "team_match", team_match)
 	config.set_value("match", "difficulty", difficulty)
 	config.set_value("match", "turns", turns)
 	config.set_value("match", "captures", captures)
@@ -723,6 +774,10 @@ func load_match() -> bool:
 	turn = clampi(int(config.get_value("match", "turn", 0)), 0, 3)
 	roll = int(config.get_value("match", "roll", 0))
 	mode = str(config.get_value("match", "mode", "human_ai"))
+	player_count = clampi(int(config.get_value("match", "player_count", 4)), 2, 4)
+	team_match = bool(config.get_value("match", "team_match", false))
+	if team_match:
+		player_count = 4
 	if mode == "lan" or mode == "solo" or mode == "duo":
 		mode = "human_ai"
 	elif mode == "local":
@@ -777,8 +832,8 @@ func draw_victory() -> void:
 	draw_string(ThemeDB.fallback_font, Vector2(640, 248), "♛", HORIZONTAL_ALIGNMENT_CENTER, 80, 34, GOLD)
 	draw_string(ThemeDB.fallback_font, Vector2(640, 307), "THE ROYAL BOARD ANNOUNCES", HORIZONTAL_ALIGNMENT_CENTER, 440, 9, GOLD)
 	draw_string(ThemeDB.fallback_font, Vector2(640, 354), "CONGRATULATIONS!", HORIZONTAL_ALIGNMENT_CENTER, 500, 25, IVORY)
-	draw_string(ThemeDB.fallback_font, Vector2(640, 401), N[champion] + " IS THE CHAMPION", HORIZONTAL_ALIGNMENT_CENTER, 500, 21, C[champion])
-	draw_string(ThemeDB.fallback_font, Vector2(640, 430), "A brilliant victory. The crown is yours.", HORIZONTAL_ALIGNMENT_CENTER, 450, 10, Color("#c3cdd2"))
+	draw_string(ThemeDB.fallback_font, Vector2(640, 401), ("RUBY + AMBER TEAM" if champion == "red" or champion == "yellow" else "JADE + SAPPHIRE TEAM") + " WINS!" if team_match else N[champion] + " IS THE CHAMPION", HORIZONTAL_ALIGNMENT_CENTER, 500, 18 if team_match else 21, GOLD if team_match else C[champion])
+	draw_string(ThemeDB.fallback_font, Vector2(640, 430), "Your team brought every token home." if team_match else "A brilliant victory. The crown is yours.", HORIZONTAL_ALIGNMENT_CENTER, 450, 10, Color("#c3cdd2"))
 	draw_string(ThemeDB.fallback_font, Vector2(640, 461), "%d turns   ·   %d captures" % [turns, captures], HORIZONTAL_ALIGNMENT_CENTER, 400, 9, MUTED)
 	draw_round_rect(Rect2(520, 495, 240, 54), GOLD, 10)
 	draw_round_rect(Rect2(525, 500, 230, 44), Color("#efd8ae"), 7)
@@ -796,6 +851,7 @@ func to_design_point(point: Vector2) -> Vector2:
 func handle_tap(point: Vector2) -> void:
 	if lan_lobby_open:
 		if Rect2(420, 430, 190, 58).has_point(point):
+			lan_session.configure_player_limit(player_count)
 			var error: Error = lan_session.host_game()
 			if error == OK:
 				local_lan_seat = 0
@@ -819,6 +875,39 @@ func handle_tap(point: Vector2) -> void:
 			ip_input.visible = false
 			new_match()
 			queue_redraw()
+		return
+	if setup_open:
+		if Rect2(350, 246, 175, 48).has_point(point):
+			mode = "human_ai"
+		elif Rect2(545, 246, 175, 48).has_point(point):
+			mode = "multiplayer"
+		elif Rect2(740, 246, 175, 48).has_point(point):
+			mode = "lan"
+		elif Rect2(350, 348, 175, 48).has_point(point) and not team_match:
+			player_count = 2
+		elif Rect2(545, 348, 175, 48).has_point(point) and not team_match:
+			player_count = 3
+		elif Rect2(740, 348, 175, 48).has_point(point):
+			player_count = 4
+		elif Rect2(350, 422, 560, 48).has_point(point) and player_count == 4:
+			team_match = not team_match
+			player_count = 4
+		elif Rect2(445, 525, 180, 52).has_point(point):
+			setup_open = false
+			if mode == "lan":
+				lan_session.configure_player_limit(player_count)
+				lan_lobby_open = true
+				ip_input.visible = true
+			else:
+				if lan_session.is_active():
+					lan_session.disconnect_session()
+				local_lan_seat = -1
+				lan_lobby_open = false
+				ip_input.visible = false
+				new_match()
+		elif Rect2(655, 525, 180, 52).has_point(point):
+			setup_open = false
+		queue_redraw()
 		return
 	if rules_open:
 		if Rect2(340, 535, 190, 48).has_point(point):
@@ -844,19 +933,9 @@ func handle_tap(point: Vector2) -> void:
 		if mode == "lan":
 			publish_lan_state()
 		return
+
 	if Rect2(710, 642, 195, 25).has_point(point):
-		var modes := ["human_ai", "multiplayer", "lan"]
-		mode = modes[(modes.find(mode) + 1) % modes.size()]
-		if mode == "lan":
-			lan_lobby_open = true
-			ip_input.visible = true
-		else:
-			if lan_session.is_active():
-				lan_session.disconnect_session()
-			local_lan_seat = -1
-			lan_lobby_open = false
-			ip_input.visible = false
-			new_match()
+		setup_open = true
 		queue_redraw()
 		return
 	if Rect2(925, 642, 195, 25).has_point(point):

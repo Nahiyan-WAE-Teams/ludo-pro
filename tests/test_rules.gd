@@ -13,6 +13,32 @@ func _initialize() -> void:
 	assert(RULES.is_human_seat("lan", 2, 2))
 	assert(not RULES.is_human_seat("lan", 2, 1))
 
+	# Player-count selection and team-match rules.
+	assert(RULES.active_player_indices(2) == [0, 2])
+	assert(RULES.active_player_indices(3) == [0, 1, 2])
+	assert(RULES.active_player_indices(4) == [0, 1, 2, 3])
+	assert(RULES.next_active_player(0, 2) == 2)
+	assert(RULES.next_active_player(2, 2) == 0)
+	assert(RULES.next_active_player(2, 3) == 0)
+	assert(RULES.human_player_count("multiplayer", 2) == 2)
+	assert(RULES.is_human_seat("human_ai", 0, -1, 2))
+	assert(not RULES.is_human_seat("human_ai", 2, -1, 2))
+	assert(RULES.team_colors("red") == ["red", "yellow"])
+	assert(RULES.team_colors("blue") == ["green", "blue"])
+	var team_board := {
+		"red":[57, 57, 57, 57],
+		"green":[-1, -1, -1, -1],
+		"yellow":[57, 57, 57, 57],
+		"blue":[-1, -1, -1, -1]
+	}
+	assert(RULES.is_team_winner(team_board, "red"))
+	var teammate_board := {"red":[4,-1,-1,-1], "green":[-1,-1,-1,-1], "yellow":[31,-1,-1,-1], "blue":[-1,-1,-1,-1]}
+	var teammate_capture := RULES.apply_move("red", teammate_board, {"token":0,"from":4,"to":5,"kind":"move"}, true)
+	assert(teammate_capture.captured.is_empty())
+	assert(teammate_capture.board["yellow"][0] == 31)
+	assert(not RULES.is_team_winner(team_board, "green"))
+	assert(RULES.team_victory_announcement("red").contains("Ruby & Amber"))
+
 	# Release and exact-finish rules.
 	assert(RULES.legal_moves([-1, -1, -1, -1], 5).is_empty())
 	assert(RULES.legal_moves([-1, -1, -1, -1], 6).size() == 4)

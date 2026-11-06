@@ -8,25 +8,58 @@ const TRACK := [Vector2i(6,0),Vector2i(6,1),Vector2i(6,2),Vector2i(6,3),Vector2i
 const LANES := {"red":[Vector2i(7,1),Vector2i(7,2),Vector2i(7,3),Vector2i(7,4),Vector2i(7,5),Vector2i(7,6)],"green":[Vector2i(1,7),Vector2i(2,7),Vector2i(3,7),Vector2i(4,7),Vector2i(5,7),Vector2i(6,7)],"yellow":[Vector2i(7,13),Vector2i(7,12),Vector2i(7,11),Vector2i(7,10),Vector2i(7,9),Vector2i(7,8)],"blue":[Vector2i(13,7),Vector2i(12,7),Vector2i(11,7),Vector2i(10,7),Vector2i(9,7),Vector2i(8,7)]}
 const YARDS := {"red":[Vector2i(2,2),Vector2i(4,2),Vector2i(2,4),Vector2i(4,4)],"green":[Vector2i(2,10),Vector2i(4,10),Vector2i(2,12),Vector2i(4,12)],"yellow":[Vector2i(10,10),Vector2i(12,10),Vector2i(10,12),Vector2i(12,12)],"blue":[Vector2i(10,2),Vector2i(12,2),Vector2i(10,4),Vector2i(12,4)]}
 
-static func human_player_count(mode: String) -> int:
+static func active_player_indices(player_count: int) -> Array[int]:
+	match clampi(player_count, 2, 4):
+		2:
+			return [0, 2]
+		3:
+			return [0, 1, 2]
+		_:
+			return [0, 1, 2, 3]
+
+static func next_active_player(current: int, player_count: int) -> int:
+	var active := active_player_indices(player_count)
+	var index := active.find(current)
+	if index < 0:
+		return active[0]
+	return active[(index + 1) % active.size()]
+
+static func human_player_count(mode: String, player_count: int = 4) -> int:
 	match mode:
 		"human_ai":
 			return 1
 		"multiplayer":
-			return 4
+			return active_player_indices(player_count).size()
 		"lan":
 			return 0
 		_:
 			return 1
 
-static func is_human_seat(mode: String, player: int, local_lan_seat: int = -1) -> bool:
+static func is_human_seat(mode: String, player: int, local_lan_seat: int = -1, player_count: int = 4) -> bool:
+	if player not in active_player_indices(player_count):
+		return false
 	if mode == "human_ai":
 		return player == 0
 	if mode == "multiplayer":
-		return player >= 0 and player < 4
+		return true
 	if mode == "lan":
 		return player == local_lan_seat and local_lan_seat >= 0
 	return player == 0
+
+static func team_colors(color: String) -> Array[String]:
+	if color == "red" or color == "yellow":
+		return ["red", "yellow"]
+	return ["green", "blue"]
+
+static func is_team_winner(board: Dictionary, color: String) -> bool:
+	for teammate in team_colors(color):
+		if not is_winner(board[teammate]):
+			return false
+	return true
+
+static func team_victory_announcement(color: String) -> String:
+	var names := {"red":"Ruby & Amber", "yellow":"Ruby & Amber", "green":"Jade & Sapphire", "blue":"Jade & Sapphire"}
+	return "Congratulations, %s team! You are the Ludo Pro champions!" % names.get(color, "Winning")
 
 static func absolute(color: String, progress: int) -> int:
 	return (int(START[color]) + progress) % 52
@@ -45,7 +78,7 @@ static func legal_moves(tokens: Array, roll: int) -> Array[Dictionary]:
 			result.append({"token": i, "from": pos, "to": pos + roll, "kind": "home" if pos + roll == 56 else "move"})
 	return result
 
-static func apply_move(color: String, board: Dictionary, move: Dictionary) -> Dictionary:
+static func apply_move(color: String, board: Dictionary, move: Dictionary, team_match: bool = false) -> Dictionary:
 	var next: Dictionary = board.duplicate(true)
 	var target: int = int(move.to)
 	next[color][int(move.token)] = 57 if target == 56 else target
@@ -54,7 +87,7 @@ static func apply_move(color: String, board: Dictionary, move: Dictionary) -> Di
 		var landing: int = absolute(color, target)
 		if landing not in SAFE:
 			for enemy in COLORS:
-				if enemy == color:
+				if enemy == color or (team_match and enemy in team_colors(color)):
 					continue
 				for i in range(4):
 					var enemy_pos: int = int(next[enemy][i])
@@ -74,7 +107,7 @@ static func opponent_priority(enemy: String, board: Dictionary) -> float:
 			advanced_count += 1
 	return 1.0 + float(home_count) * 0.22 + float(advanced_count) * 0.08
 
-static func threat_count(color: String, progress: int, board: Dictionary) -> int:
+static func threat_count(color: String, progress: int, board: Dictionary, team_match: bool = false) -> int:
 	if progress < 0 or progress >= 52:
 		return 0
 	var target: int = absolute(color, progress)
@@ -82,7 +115,7 @@ static func threat_count(color: String, progress: int, board: Dictionary) -> int
 		return 0
 	var threats := 0
 	for enemy in COLORS:
-		if enemy == color:
+		if enemy == color or (team_match and enemy in team_colors(color)):
 			continue
 		for enemy_pos_value in board[enemy]:
 			var enemy_pos: int = int(enemy_pos_value)
@@ -93,13 +126,13 @@ static func threat_count(color: String, progress: int, board: Dictionary) -> int
 				threats += 1
 	return threats
 
-static func attack_potential(color: String, progress: int, board: Dictionary) -> float:
+static func attack_potential(color: String, progress: int, board: Dictionary, team_match: bool = false) -> float:
 	if progress < 0 or progress >= 52:
 		return 0.0
 	var origin: int = absolute(color, progress)
 	var value := 0.0
 	for enemy in COLORS:
-		if enemy == color:
+		if enemy == color or (team_match and enemy in team_colors(color)):
 			continue
 		for enemy_pos_value in board[enemy]:
 			var enemy_pos: int = int(enemy_pos_value)
@@ -110,7 +143,7 @@ static func attack_potential(color: String, progress: int, board: Dictionary) ->
 				value += float(7 - distance) * 1.8 * opponent_priority(enemy, board)
 	return value
 
-static func evaluate_position(color: String, board: Dictionary) -> float:
+static func evaluate_position(color: String, board: Dictionary, team_match: bool = false) -> float:
 	var score := 0.0
 	var active_positions: Array[int] = []
 	for token_value in board[color]:
@@ -123,9 +156,9 @@ static func evaluate_position(color: String, board: Dictionary) -> float:
 			score += 150.0 + float(pos - 52) * 35.0
 		else:
 			score += 12.0 + float(pos) * 2.25
-			var threats: int = threat_count(color, pos, board)
+			var threats: int = threat_count(color, pos, board, team_match)
 			score -= float(threats) * (13.0 + float(pos) * 0.34)
-			score += attack_potential(color, pos, board)
+			score += attack_potential(color, pos, board, team_match)
 			if absolute(color, pos) in SAFE:
 				score += 17.0
 			active_positions.append(pos)
@@ -137,11 +170,11 @@ static func evaluate_position(color: String, board: Dictionary) -> float:
 				score += 2.5
 	return score
 
-static func score_move(color: String, all_tokens: Dictionary, move: Dictionary, roll: int) -> int:
-	var outcome := apply_move(color, all_tokens, move)
+static func score_move(color: String, all_tokens: Dictionary, move: Dictionary, roll: int, team_match: bool = false) -> int:
+	var outcome := apply_move(color, all_tokens, move, team_match)
 	var next_board: Dictionary = outcome.board
 	var captured: Array = outcome.captured
-	var score: float = evaluate_position(color, next_board) - evaluate_position(color, all_tokens)
+	var score: float = evaluate_position(color, next_board, team_match) - evaluate_position(color, all_tokens, team_match)
 	if move.kind == "home":
 		score += 500.0
 	if move.kind == "release":
@@ -161,14 +194,14 @@ static func score_move(color: String, all_tokens: Dictionary, move: Dictionary, 
 		score += 24.0
 	return int(round(score * 10.0))
 
-static func extra_turn_lookahead(color: String, board: Dictionary) -> float:
+static func extra_turn_lookahead(color: String, board: Dictionary, team_match: bool = false) -> float:
 	var expected := 0.0
 	for future_roll in range(1, 7):
 		var moves: Array[Dictionary] = legal_moves(board[color], future_roll)
 		var best := 0.0
 		for move in moves:
-			var outcome := apply_move(color, board, move)
-			var value: float = evaluate_position(color, outcome.board) - evaluate_position(color, board)
+			var outcome := apply_move(color, board, move, team_match)
+			var value: float = evaluate_position(color, outcome.board, team_match) - evaluate_position(color, board, team_match)
 			value += float(outcome.captured.size()) * 26.0
 			if move.kind == "home":
 				value += 50.0
@@ -176,14 +209,14 @@ static func extra_turn_lookahead(color: String, board: Dictionary) -> float:
 		expected += best / 6.0
 	return expected
 
-static func reply_utility(player: String, opponent: String, before: Dictionary, after: Dictionary, captured: Array) -> float:
-	var player_gain: float = evaluate_position(player, after) - evaluate_position(player, before)
-	var opponent_gain: float = evaluate_position(opponent, after) - evaluate_position(opponent, before)
+static func reply_utility(player: String, opponent: String, before: Dictionary, after: Dictionary, captured: Array, team_match: bool = false) -> float:
+	var player_gain: float = evaluate_position(player, after, team_match) - evaluate_position(player, before, team_match)
+	var opponent_gain: float = evaluate_position(opponent, after, team_match) - evaluate_position(opponent, before, team_match)
 	return opponent_gain * 1.15 - player_gain * 1.25 + float(captured.size()) * 42.0
 
 # Expectimax over the next three opponents. Each opponent observes the same board,
 # receives an unknown fair die roll, then chooses the response with the best outcome.
-static func multi_opponent_reply_risk(player: String, board: Dictionary, opponent_order: Array, depth: int = 3) -> float:
+static func multi_opponent_reply_risk(player: String, board: Dictionary, opponent_order: Array, depth: int = 3, team_match: bool = false) -> float:
 	if depth <= 0 or opponent_order.is_empty():
 		return 0.0
 	var opponent: String = str(opponent_order[0])
@@ -193,36 +226,39 @@ static func multi_opponent_reply_risk(player: String, board: Dictionary, opponen
 		var moves: Array[Dictionary] = legal_moves(board[opponent], die_roll)
 		var best_value := 0.0
 		for move in moves:
-			var outcome := apply_move(opponent, board, move)
-			var immediate: float = reply_utility(player, opponent, board, outcome.board, outcome.captured)
-			var continuation: float = multi_opponent_reply_risk(player, outcome.board, remaining, depth - 1)
+			var outcome := apply_move(opponent, board, move, team_match)
+			var immediate: float = reply_utility(player, opponent, board, outcome.board, outcome.captured, team_match)
+			var continuation: float = multi_opponent_reply_risk(player, outcome.board, remaining, depth - 1, team_match)
 			best_value = maxf(best_value, immediate + continuation)
 		expected += best_value / 6.0
 	return expected
 
-static func next_opponent_order(color: String) -> Array[String]:
+static func next_opponent_order(color: String, team_match: bool = false) -> Array[String]:
 	var order: Array[String] = []
 	var start_index: int = COLORS.find(color)
 	for offset in range(1, 4):
-		order.append(COLORS[(start_index + offset) % COLORS.size()])
+		var opponent := COLORS[(start_index + offset) % COLORS.size()]
+		if team_match and opponent in team_colors(color):
+			continue
+		order.append(opponent)
 	return order
 
 static func victory_announcement(color: String) -> String:
 	var names := {"red":"Ruby", "green":"Jade", "yellow":"Amber", "blue":"Sapphire"}
 	return "Congratulations, %s! You are the Ludo Pro champion!" % names.get(color, "Player")
 
-static func choose_ai_move(color: String, all_tokens: Dictionary, moves: Array[Dictionary], roll: int, difficulty: String) -> Dictionary:
+static func choose_ai_move(color: String, all_tokens: Dictionary, moves: Array[Dictionary], roll: int, difficulty: String, team_match: bool = false) -> Dictionary:
 	if moves.is_empty():
 		return {}
 	var ranked: Array[Dictionary] = []
 	for move in moves:
-		var score: float = float(score_move(color, all_tokens, move, roll))
-		var outcome := apply_move(color, all_tokens, move)
+		var score: float = float(score_move(color, all_tokens, move, roll, team_match))
+		var outcome := apply_move(color, all_tokens, move, team_match)
 		# A capture or six grants another turn. Champion difficulty plans that bonus turn.
 		if difficulty == "champion":
 			if roll == 6 or not outcome.captured.is_empty():
-				score += extra_turn_lookahead(color, outcome.board) * 5.0
-			var reply_risk: float = multi_opponent_reply_risk(color, outcome.board, next_opponent_order(color), 3)
+				score += extra_turn_lookahead(color, outcome.board, team_match) * 5.0
+			var reply_risk: float = multi_opponent_reply_risk(color, outcome.board, next_opponent_order(color, team_match), 3, team_match)
 			score -= reply_risk * 0.72
 		ranked.append({"move": move, "score": score})
 	ranked.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
