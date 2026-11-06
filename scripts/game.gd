@@ -95,6 +95,15 @@ func setup_lan_ip_input() -> void:
 	ip_input.size = Vector2(300, 48)
 	ip_input.visible = false
 	ip_input.add_theme_font_size_override("font_size", 18)
+	ip_input.add_theme_color_override("font_color", IVORY)
+	ip_input.add_theme_color_override("font_placeholder_color", MUTED)
+	var input_style := StyleBoxFlat.new()
+	input_style.bg_color = Color("#0d151d")
+	input_style.border_color = GOLD.darkened(0.25)
+	input_style.set_border_width_all(1)
+	input_style.set_corner_radius_all(8)
+	ip_input.add_theme_stylebox_override("normal", input_style)
+	ip_input.add_theme_stylebox_override("focus", input_style)
 	root.add_child(ip_input)
 
 func _on_lan_status(message: String) -> void:
@@ -844,6 +853,7 @@ func handle_tap(point: Vector2) -> void:
 			lan_lobby_open = false
 			ip_input.visible = false
 			new_match()
+		queue_redraw()
 		return
 	if Rect2(925, 642, 195, 25).has_point(point):
 		var levels := ["balanced", "tactical", "champion"]
