@@ -54,7 +54,7 @@ func _initialize() -> void:
 	# Classic blockade rules: two same-color tokens block crossing and landing.
 	var blockade_board := {
 		"red":[5, -1, -1, -1],
-		"green":[2, 2, -1, -1], # Green absolute square 15 is a blockade.
+		"green":[47, 47, -1, -1], # Green tokens form a blockade at absolute square 8.
 		"yellow":[-1, -1, -1, -1],
 		"blue":[-1, -1, -1, -1]
 	}
