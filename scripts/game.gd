@@ -593,12 +593,12 @@ func finish_roll() -> void:
 	busy = false
 	roll = die
 	show_banner("%s ROLLED A %d" % [N[R.COLORS[turn]], roll], C[R.COLORS[turn]])
-	if roll == 6 and sixes == 2:
+	if R.is_forfeited_third_six(roll, sixes):
 		add_log("%s forfeits after three sixes." % N[R.COLORS[turn]])
 		sixes = 0
 		next_turn()
 		return
-	sixes = sixes + 1 if roll == 6 else 0
+	sixes = R.next_six_streak(roll, sixes)
 	choices = R.legal_moves_for_board(R.COLORS[turn], pieces, roll, player_count)
 	if choices.is_empty():
 		add_log("%s rolled %d. No legal move." % [N[R.COLORS[turn]], roll])
@@ -667,7 +667,7 @@ func finish_animation() -> void:
 			publish_lan_state()
 		queue_redraw()
 		return
-	if roll != 6 and not captured:
+	if not R.earns_bonus_turn(roll, captured):
 		next_turn()
 	else:
 		roll = 0
