@@ -3,6 +3,16 @@ extends SceneTree
 const RULES = preload("res://scripts/game_rules.gd")
 
 func _initialize() -> void:
+	# Three playable modes assign human seats deterministically.
+	assert(RULES.human_player_count("human_ai") == 1)
+	assert(RULES.human_player_count("multiplayer") == 4)
+	assert(RULES.human_player_count("lan") == 0)
+	assert(RULES.is_human_seat("human_ai", 0, 0))
+	assert(not RULES.is_human_seat("human_ai", 1, 0))
+	assert(RULES.is_human_seat("multiplayer", 3, 0))
+	assert(RULES.is_human_seat("lan", 2, 2))
+	assert(not RULES.is_human_seat("lan", 2, 1))
+
 	# Release and exact-finish rules.
 	assert(RULES.legal_moves([-1, -1, -1, -1], 5).is_empty())
 	assert(RULES.legal_moves([-1, -1, -1, -1], 6).size() == 4)

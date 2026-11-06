@@ -40,9 +40,23 @@ Champion mode now runs a three-opponent expectimax search after each candidate m
 
 When a match is won, the game launches a full-screen animated congratulations ceremony, fireworks particles, a champion callout, and a short vibration. On Android devices with an installed native text-to-speech voice, it also speaks the winner's name and announces: "Congratulations, Ruby! You are the Ludo Pro champion!" The spoken name changes with the winning color. If device speech is unavailable, the visual announcement still plays.
 
+## Three playable modes
+
+1. **Human vs AI:** one local human plays against three AI opponents. Choose Balanced, Tactical, or Champion.
+2. **Multiplayer:** four people share one device in local pass-and-play. The active player passes the phone after their turn.
+3. **LAN Players:** up to four Android devices play over the same Wi-Fi network. One device hosts and the others join using the host's IPv4 address. The host is authoritative for dice rolls and board moves; empty seats are filled by AI.
+
+To start a LAN match:
+- Connect all phones to the same Wi-Fi network.
+- On the host, choose **LAN Players → Host Game**.
+- Read the detected host IPv4 address in the lobby.
+- On each other phone, choose **LAN Players**, enter that IP address, then tap **Join Game**.
+- The LAN port is UDP 24680. Android export must include the normal INTERNET permission for ENet sockets.
+
+LAN uses direct local-network ENet connections. It does not require an account, cloud server, internet access, or matchmaking. Internet multiplayer across different networks is not included.
+
 ## Gameplay
 - Four player colors and four tokens per player
-- Solo vs three AI, two local players plus two AI, or four local players
 - Six to release, 52-square outer track, colored home lanes, safe squares, captures, exact home entry, bonus turns and three-six forfeiture
 - Balanced, tactical and champion AI scoring
 - Local match persistence in `user://ludo_pro_save.cfg`
