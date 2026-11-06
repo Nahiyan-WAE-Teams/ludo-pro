@@ -114,13 +114,13 @@ func _draw() -> void:
 	draw_header()
 	draw_board()
 	draw_sidebar()
-	draw_particles()
 	if banner_time > 0.0:
 		draw_banner()
 	if rules_open:
 		draw_rules()
 	if champion != "":
 		draw_victory()
+	draw_particles()
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 func draw_background_detail() -> void:
@@ -352,6 +352,8 @@ func new_match() -> void:
 	anim_length = 0.0
 	wait_ai = 0.0
 	particles.clear()
+	victory_time = 0.0
+	victory_announced = false
 	show_banner("A NEW MATCH BEGINS", GOLD)
 	save_match()
 	queue_redraw()
@@ -492,7 +494,7 @@ func announce_victory(color: String) -> void:
 	# Use the Android device's installed native text-to-speech engine when available.
 	var voices: Array = DisplayServer.tts_get_voices()
 	if not voices.is_empty():
-		DisplayServer.tts_speak(announcement, "", 92, 1.0, 0.92, 7401, true)
+		DisplayServer.tts_speak(announcement, str(voices[0].get("id", "")), 92, 1.0, 0.92, 7401, true)
 	Input.vibrate_handheld(90)
 
 func add_log(message: String) -> void:
@@ -620,7 +622,7 @@ func handle_tap(point: Vector2) -> void:
 			queue_redraw()
 		return
 	if champion != "":
-		if Rect2(520, 438, 240, 58).has_point(point):
+		if Rect2(520, 495, 240, 54).has_point(point):
 			new_match()
 		return
 	if Rect2(718, 513, 242, 68).has_point(point):
