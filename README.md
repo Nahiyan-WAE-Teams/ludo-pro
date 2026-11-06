@@ -1,14 +1,27 @@
-# Ludo Pro
-Premium offline-first Ludo game built with vanilla JavaScript, Canvas 2D and CSS. No API keys, backend or runtime dependencies.
+# Ludo Pro · Native Android
 
-## Run
-Open index.html in a modern browser, or run npm run serve and visit http://localhost:4173. Run engine tests with npm test.
+**This is the native Godot rebuild.** The earlier HTML/JavaScript browser prototype is not the Android product.
 
-## Features
-- Four-color board, four tokens per player, safe squares, captures, extra turns, exact home entry and victory.
-- Solo vs 3 AI, 2 humans + 2 AI, and 4-player local modes.
-- Three AI strategy profiles. AI scores home progress, captures, safe positions and opponent threat distances.
-- Responsive interface, local autosave, move log, match stats, rules and victory dialog.
-- Offline game logic and localStorage saves. Google Fonts is an optional online enhancement; fallback fonts work offline.
+## Technology
+- Godot 4.4 and GDScript 2.0
+- Native 2D drawing, touch input, frame-based animation and local persistence
+- No WebView, browser, HTML/CSS/JavaScript runtime, backend, API or network dependency
 
-Dice are not manipulated by AI. The computer chooses moves strategically; it does not alter outcomes. Online matchmaking, accounts, cloud saves and monetization are outside this local-play foundation.
+## Open and run
+Open this repository folder in Godot 4.4 and press Run. The project is configured for landscape orientation.
+
+Run the rules checks:
+```sh
+godot --headless --path . --script res://tests/test_rules.gd
+```
+
+## Current native gameplay foundation
+- Four player colors and four tokens per player
+- Solo vs three AI, two local players plus two AI, or four local players (mode selector UI is the next polish pass)
+- Six to release, outer track, colored home lanes, safe squares, captures, exact home entry, bonus turns and three-six forfeiture
+- Balanced, tactical and champion AI scoring
+- Native token movement animation and touch selection
+- Local match persistence in user://ludo_pro_save.cfg
+
+## Android APK
+Install Godot 4.4 export templates and configure Android SDK/JDK in Editor Settings. Create an Android export preset and export a debug APK. A signed release requires a user-owned keystore. The source project is not represented as a tested APK until export and device verification succeed.
