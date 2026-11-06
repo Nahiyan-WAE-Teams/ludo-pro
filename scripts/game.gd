@@ -1,6 +1,7 @@
 extends Node2D
 
 const R = preload("res://scripts/game_rules.gd")
+const LAN_SESSION_SCRIPT = preload("res://scripts/lan_session.gd")
 const BG := Color("#0b1118")
 const BG_2 := Color("#101a24")
 const PANEL := Color("#141f2a")
@@ -32,7 +33,12 @@ var pieces: Dictionary = {}
 var turn := 0
 var roll := 0
 var phase := "roll"
-var mode := "solo"
+var mode := "human_ai"
+var lan_session: Node
+var local_lan_seat := -1
+var lan_lobby_open := false
+var lan_status := "Host a room or join a player on your Wi-Fi network."
+var ip_input: LineEdit
 var difficulty := "balanced"
 var turns := 0
 var captures := 0
@@ -63,9 +69,86 @@ var ui_offset := Vector2.ZERO
 
 func _ready() -> void:
 	rng.randomize()
+	lan_session = LAN_SESSION_SCRIPT.new()
+	lan_session.name = "LanSession"
+	add_child(lan_session)
+	lan_session.session_status.connect(_on_lan_status)
+	lan_session.action_requested.connect(_on_lan_action)
+	lan_session.snapshot_received.connect(_on_lan_snapshot)
+	lan_session.roster_changed.connect(_on_lan_roster)
+	setup_lan_ip_input()
 	get_viewport().size_changed.connect(queue_redraw)
 	if not load_match():
 		new_match()
+
+func setup_lan_ip_input() -> void:
+	var layer := CanvasLayer.new()
+	layer.name = "LanInputLayer"
+	add_child(layer)
+	var root := Control.new()
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(root)
+	ip_input = LineEdit.new()
+	ip_input.placeholder_text = "Host IP address, e.g. 192.168.1.10"
+	ip_input.text = "192.168.1.10"
+	ip_input.position = Vector2(490, 355)
+	ip_input.size = Vector2(300, 48)
+	ip_input.visible = false
+	ip_input.add_theme_font_size_override("font_size", 18)
+	root.add_child(ip_input)
+
+func _on_lan_status(message: String) -> void:
+	lan_status = message
+	queue_redraw()
+
+func _on_lan_roster(_seats: Dictionary) -> void:
+	local_lan_seat = int(lan_session.local_seat)
+	if lan_session.is_host():
+		publish_lan_state()
+	queue_redraw()
+
+func _on_lan_action(_peer_id: int, seat: int, action: String, payload: Dictionary) -> void:
+	if not lan_session.is_host() or seat != turn or champion != "":
+		return
+	if action == "roll" and phase == "roll" and not busy:
+		roll_dice()
+	elif action == "move" and phase == "move" and not busy:
+		var token_index := int(payload.get("token", -1))
+		for move in choices:
+			if int(move.token) == token_index:
+				commit_move(move)
+				break
+
+func _on_lan_snapshot(snapshot: Dictionary) -> void:
+	if snapshot.has("disconnected"):
+		busy = true
+		phase = "lan_disconnected"
+		return
+	if lan_session.is_host():
+		return
+	pieces = snapshot.get("pieces", pieces).duplicate(true)
+	turn = int(snapshot.get("turn", turn))
+	roll = int(snapshot.get("roll", roll))
+	die = int(snapshot.get("die", die))
+	phase = str(snapshot.get("phase", phase))
+	turns = int(snapshot.get("turns", turns))
+	captures = int(snapshot.get("captures", captures))
+	homes = int(snapshot.get("homes", homes))
+	sixes = int(snapshot.get("sixes", sixes))
+	champion = str(snapshot.get("champion", champion))
+	choices = snapshot.get("choices", []).duplicate(true)
+	busy = false
+	queue_redraw()
+
+func publish_lan_state() -> void:
+	if mode != "lan" or not lan_session.is_host():
+		return
+	lan_session.publish_snapshot({
+		"pieces": pieces, "turn": turn, "roll": roll, "die": die,
+		"phase": phase, "turns": turns, "captures": captures,
+		"homes": homes, "sixes": sixes, "champion": champion,
+		"choices": choices
+	})
 
 func _process(delta: float) -> void:
 	pulse += delta
@@ -87,9 +170,9 @@ func _process(delta: float) -> void:
 	if wait_ai > 0.0:
 		wait_ai = maxf(0.0, wait_ai - delta)
 		if wait_ai <= 0.0:
-			if phase == "roll" and not is_human(turn):
+			if phase == "roll" and is_ai_turn(turn):
 				ai_begin_roll()
-			elif phase == "move" and not is_human(turn):
+			elif phase == "move" and is_ai_turn(turn):
 				ai_choose_move()
 	if banner_time > 0.0:
 		banner_time = maxf(0.0, banner_time - delta)
@@ -118,6 +201,8 @@ func _draw() -> void:
 		draw_banner()
 	if rules_open:
 		draw_rules()
+	if lan_lobby_open:
+		draw_lan_lobby()
 	if champion != "":
 		draw_victory()
 	draw_particles()
@@ -246,7 +331,7 @@ func draw_sidebar() -> void:
 		draw_circle(Vector2(740, y + 22), 6, C[color])
 		draw_string(ThemeDB.fallback_font, Vector2(756, y + 19), N[color], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, IVORY)
 		draw_string(ThemeDB.fallback_font, Vector2(756, y + 32), PLAYER_META[color], HORIZONTAL_ALIGNMENT_LEFT, -1, 7, MUTED)
-		draw_string(ThemeDB.fallback_font, Vector2(1045, y + 27), "YOU" if is_human(i) else "CPU", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, GOLD if is_human(i) else MUTED)
+		draw_string(ThemeDB.fallback_font, Vector2(1045, y + 27), "YOU" if is_human(i) else ("LAN" if mode == "lan" and i in lan_session.seats.values() else ("CPU" if mode != "multiplayer" else "LOCAL")), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, GOLD if is_human(i) else MUTED)
 		var home_count := 0
 		for token in pieces[color]:
 			if int(token) == 57:
@@ -263,6 +348,10 @@ func draw_sidebar() -> void:
 		hint = "The strategist is thinking..."
 	if phase == "animating":
 		hint = "Moving across the board..."
+	if phase == "waiting":
+		hint = "Waiting for the host..."
+	if phase == "lan_disconnected":
+		hint = "LAN connection lost. Return to the lobby."
 	if champion != "":
 		hint = "A new champion has risen."
 	draw_string(ThemeDB.fallback_font, Vector2(720, 494), hint, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, MUTED)
@@ -278,7 +367,7 @@ func draw_sidebar() -> void:
 	draw_stat(Vector2(720, 620), "TURNS", str(turns))
 	draw_stat(Vector2(865, 620), "CAPTURES", str(captures))
 	draw_stat(Vector2(1034, 620), "HOME", str(homes))
-	draw_string(ThemeDB.fallback_font, Vector2(720, 657), "MODE  %s  ↻" % mode.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, GOLD)
+	draw_string(ThemeDB.fallback_font, Vector2(720, 657), "MODE  %s  ↻" % mode.replace("_", " ").to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, GOLD)
 	draw_string(ThemeDB.fallback_font, Vector2(934, 657), "AI  %s  ↻" % difficulty.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, GOLD)
 	draw_string(ThemeDB.fallback_font, Vector2(720, 679), "RULES", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, MUTED)
 	draw_string(ThemeDB.fallback_font, Vector2(1150, 679), "SAVED LOCALLY", HORIZONTAL_ALIGNMENT_LEFT, -1, 7, MUTED)
@@ -359,13 +448,28 @@ func new_match() -> void:
 	queue_redraw()
 
 func human_count() -> int:
-	return 4 if mode == "local" else 2 if mode == "duo" else 1
+	return R.human_player_count(mode)
 
 func is_human(player: int) -> bool:
-	return player < human_count()
+	if mode == "lan":
+		return player == local_lan_seat and local_lan_seat >= 0
+	return R.is_human_seat(mode, player)
+
+func is_ai_turn(player: int) -> bool:
+	if mode != "lan":
+		return not is_human(player)
+	if not lan_session.is_host():
+		return false
+	return player not in lan_session.seats.values()
 
 func roll_dice() -> void:
 	if phase != "roll" or not is_human(turn) or busy or champion != "":
+		return
+	if mode == "lan" and not lan_session.is_host():
+		busy = true
+		phase = "waiting"
+		lan_session.request_action("roll")
+		queue_redraw()
 		return
 	busy = true
 	die = rng.randi_range(1, 6)
@@ -399,12 +503,20 @@ func finish_roll() -> void:
 			wait_ai = 0.5
 	else:
 		phase = "move"
-		if not is_human(turn):
+		if is_ai_turn(turn):
 			wait_ai = 0.55
+	if mode == "lan":
+		publish_lan_state()
 	queue_redraw()
 
 func commit_move(move: Dictionary) -> void:
 	if busy or phase != "move":
+		return
+	if mode == "lan" and not lan_session.is_host():
+		busy = true
+		phase = "waiting"
+		lan_session.request_action("move", {"token": int(move.token)})
+		queue_redraw()
 		return
 	var color: String = R.COLORS[turn]
 	anim_data = {"color":color, "token":int(move.token), "from":int(move.from), "to":int(move.to)}
@@ -465,6 +577,8 @@ func finish_animation() -> void:
 		if not is_human(turn):
 			wait_ai = 0.65
 	save_match()
+	if mode == "lan":
+		publish_lan_state()
 	queue_redraw()
 
 func next_turn() -> void:
@@ -473,8 +587,10 @@ func next_turn() -> void:
 	phase = "roll"
 	choices.clear()
 	busy = false
-	if not is_human(turn):
+	if is_ai_turn(turn):
 		wait_ai = 0.7
+	if mode == "lan":
+		publish_lan_state()
 	queue_redraw()
 
 func ai_choose_move() -> void:
@@ -548,7 +664,9 @@ func load_match() -> bool:
 			return false
 	turn = clampi(int(config.get_value("match", "turn", 0)), 0, 3)
 	roll = int(config.get_value("match", "roll", 0))
-	mode = str(config.get_value("match", "mode", "solo"))
+	mode = str(config.get_value("match", "mode", "human_ai"))
+	if mode == "lan":
+		mode = "human_ai"
 	difficulty = str(config.get_value("match", "difficulty", "balanced"))
 	turns = int(config.get_value("match", "turns", 0))
 	captures = int(config.get_value("match", "captures", 0))
@@ -616,6 +734,26 @@ func to_design_point(point: Vector2) -> Vector2:
 	return (point - ui_offset) / maxf(ui_scale, 0.001)
 
 func handle_tap(point: Vector2) -> void:
+	if lan_lobby_open:
+		if Rect2(420, 430, 190, 58).has_point(point):
+			var error: Error = lan_session.host_game()
+			if error == OK:
+				local_lan_seat = 0
+				new_match()
+				publish_lan_state()
+			lan_status = "Hosting on port 24680. Other players enter this phone's Wi-Fi IP."
+			queue_redraw()
+		elif Rect2(670, 430, 190, 58).has_point(point):
+			var error: Error = lan_session.join_game(ip_input.text)
+			if error == OK:
+				phase = "waiting"
+				busy = true
+			queue_redraw()
+		elif Rect2(560, 520, 160, 48).has_point(point):
+			lan_lobby_open = false
+			ip_input.visible = false
+			queue_redraw()
+		return
 	if rules_open:
 		if Rect2(340, 535, 190, 48).has_point(point):
 			rules_open = false
@@ -633,9 +771,15 @@ func handle_tap(point: Vector2) -> void:
 		new_match()
 		return
 	if Rect2(710, 642, 195, 25).has_point(point):
-		var modes := ["solo", "duo", "local"]
+		var modes := ["human_ai", "multiplayer", "lan"]
 		mode = modes[(modes.find(mode) + 1) % modes.size()]
-		new_match()
+		if mode == "lan":
+			lan_lobby_open = true
+			ip_input.visible = true
+		else:
+			lan_lobby_open = false
+			ip_input.visible = false
+			new_match()
 		return
 	if Rect2(925, 642, 195, 25).has_point(point):
 		var levels := ["balanced", "tactical", "champion"]
