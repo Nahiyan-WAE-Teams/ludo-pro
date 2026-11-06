@@ -42,9 +42,11 @@ When a match is won, the game launches a full-screen animated congratulations ce
 
 ## Three playable modes
 
-1. **Human vs AI:** one local human plays against three AI opponents. Choose Balanced, Tactical, or Champion.
-2. **Multiplayer:** four people share one device in local pass-and-play. The active player passes the phone after their turn.
-3. **LAN Players:** up to four Android devices play over the same Wi-Fi network. One device hosts and the others join using the host's IPv4 address. The host is authoritative for dice rolls and board moves; empty seats are filled by AI.
+Each mode opens a match setup screen with **2, 3, or 4 players**:
+- **Human vs AI:** one local human plays against the AI in the remaining active seats.
+- **Multiplayer:** 2–4 people share one device in local pass-and-play. The active player passes the phone after their turn.
+- **LAN Players:** 2–4 Android devices can play over the same Wi-Fi network. One device hosts and the others join using the host's IPv4 address. The host is authoritative for dice rolls and board moves; any unoccupied selected seats are filled by AI.
+- **Team Match:** choose this option in the setup screen for a four-seat 2v2 game. Red + Yellow play together against Green + Blue. A team wins when both teammates have brought all four tokens home. Team Match is available in Human vs AI, Multiplayer, and LAN.
 
 To start a LAN match:
 - Connect all phones to the same Wi-Fi network.
