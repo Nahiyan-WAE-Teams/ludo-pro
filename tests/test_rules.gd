@@ -58,7 +58,7 @@ func _initialize() -> void:
 		"yellow":[-1, -1, -1, -1],
 		"blue":[-1, -1, -1, -1]
 	}
-	assert(RULES.is_blockade_at(blockade_board, 15, 4))
+	assert(RULES.is_blockade_at(blockade_board, 8, 4))
 	assert(RULES.legal_moves_for_board("red", blockade_board, 4, 4).is_empty())
 	assert(RULES.legal_moves_for_board("red", blockade_board, 3, 4).is_empty())
 	var blockade_escape := RULES.legal_moves_for_board("green", blockade_board, 1, 4)
