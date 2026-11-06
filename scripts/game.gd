@@ -812,8 +812,12 @@ func handle_tap(point: Vector2) -> void:
 				busy = true
 			queue_redraw()
 		elif Rect2(560, 525, 160, 38).has_point(point):
+			lan_session.disconnect_session()
+			local_lan_seat = -1
+			mode = "human_ai"
 			lan_lobby_open = false
 			ip_input.visible = false
+			new_match()
 			queue_redraw()
 		return
 	if rules_open:
