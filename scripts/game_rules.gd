@@ -43,6 +43,17 @@ static func apply_move(color: String, board: Dictionary, move: Dictionary) -> Di
 						captured.append({"color": enemy, "token": i})
 	return {"board": next, "captured": captured}
 
+static func opponent_priority(enemy: String, board: Dictionary) -> float:
+	var home_count := 0
+	var advanced_count := 0
+	for token_value in board[enemy]:
+		var pos: int = int(token_value)
+		if pos == 57:
+			home_count += 1
+		elif pos >= 44 and pos < 57:
+			advanced_count += 1
+	return 1.0 + float(home_count) * 0.22 + float(advanced_count) * 0.08
+
 static func threat_count(color: String, progress: int, board: Dictionary) -> int:
 	if progress < 0 or progress >= 52:
 		return 0
@@ -76,7 +87,7 @@ static func attack_potential(color: String, progress: int, board: Dictionary) ->
 				continue
 			var distance: int = (absolute(enemy, enemy_pos) - origin + 52) % 52
 			if distance >= 1 and distance <= 6:
-				value += float(7 - distance) * 1.8
+				value += float(7 - distance) * 1.8 * opponent_priority(enemy, board)
 	return value
 
 static func evaluate_position(color: String, board: Dictionary) -> float:
@@ -93,7 +104,7 @@ static func evaluate_position(color: String, board: Dictionary) -> float:
 		else:
 			score += 12.0 + float(pos) * 2.25
 			var threats: int = threat_count(color, pos, board)
-			score -= float(threats) * 13.0
+			score -= float(threats) * (13.0 + float(pos) * 0.34)
 			score += attack_potential(color, pos, board)
 			if absolute(color, pos) in SAFE:
 				score += 17.0
@@ -117,6 +128,9 @@ static func score_move(color: String, all_tokens: Dictionary, move: Dictionary, 
 		score += 24.0
 	if not captured.is_empty():
 		score += 260.0 + float(captured.size() - 1) * 80.0
+		for victim in captured:
+			score += float(int(board[victim.color][int(victim.token)]) / 52.0) * 28.0
+			score += float(4 - count_home_tokens(victim.color, board)) * 12.0
 	if roll == 6 or not captured.is_empty():
 		score += 14.0
 	# A piece entering the home lane is immune to outer-track attacks.
@@ -164,6 +178,13 @@ static func choose_ai_move(color: String, all_tokens: Dictionary, moves: Array[D
 		if float(item.score) >= float(ranked[0].score) - margin:
 			candidates.append(item.move)
 	return candidates[randi() % candidates.size()]
+
+static func count_home_tokens(color: String, board: Dictionary) -> int:
+	var count := 0
+	for token_value in board[color]:
+		if int(token_value) == 57:
+			count += 1
+	return count
 
 static func is_winner(tokens: Array) -> bool:
 	for token in tokens:
