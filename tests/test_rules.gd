@@ -37,6 +37,7 @@ func _initialize() -> void:
 	assert(not RULES.is_human_seat("human_ai", 2, -1, 2))
 	assert(RULES.team_colors("red") == ["red", "yellow"])
 	assert(RULES.team_colors("blue") == ["green", "blue"])
+	assert(RULES.next_opponent_order("red", true, 4) == ["green", "yellow", "blue"]) # Partner turn is part of the real sequence.
 	var team_board := {
 		"red":[57, 57, 57, 57],
 		"green":[-1, -1, -1, -1],
