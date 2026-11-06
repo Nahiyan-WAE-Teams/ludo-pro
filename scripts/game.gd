@@ -235,7 +235,7 @@ func draw_header() -> void:
 	draw_string(ThemeDB.fallback_font, Vector2(145, 33), "PRO", HORIZONTAL_ALIGNMENT_LEFT, -1, 17, GOLD)
 	draw_string(ThemeDB.fallback_font, Vector2(88, 49), "THE ROYAL BOARD", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, MUTED)
 	draw_circle(Vector2(1070, 33), 4, Color("#69b18e"))
-	draw_string(ThemeDB.fallback_font, Vector2(1083, 37), "OFFLINE PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("#b4c1c6"))
+	draw_string(ThemeDB.fallback_font, Vector2(1083, 37), "LAN NETWORK" if mode == "lan" else "OFFLINE PLAY", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color("#b4c1c6"))
 	draw_string(ThemeDB.fallback_font, Vector2(1198, 37), "v1.1", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, MUTED)
 
 func draw_board() -> void:
@@ -810,7 +810,11 @@ func handle_tap(point: Vector2) -> void:
 		return
 	if champion != "":
 		if Rect2(520, 495, 240, 54).has_point(point):
+			if mode == "lan" and not lan_session.is_host():
+				return
 			new_match()
+			if mode == "lan":
+				publish_lan_state()
 		return
 	if Rect2(718, 513, 242, 68).has_point(point):
 		roll_dice()
