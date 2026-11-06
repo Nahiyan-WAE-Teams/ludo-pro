@@ -250,21 +250,33 @@ static func reply_utility(player: String, opponent: String, before: Dictionary, 
 
 # Expectimax over the next three opponents. Each opponent observes the same board,
 # receives an unknown fair die roll, then chooses the response with the best outcome.
-static func multi_opponent_reply_risk(player: String, board: Dictionary, opponent_order: Array, depth: int = 3, team_match: bool = false, player_count: int = 4) -> float:
+static func multi_opponent_reply_risk(player: String, board: Dictionary, opponent_order: Array, depth: int = 3, team_match: bool = false, player_count: int = 4, consecutive_sixes: int = 0) -> float:
 	if depth <= 0 or opponent_order.is_empty():
 		return 0.0
 	var opponent: String = str(opponent_order[0])
 	var remaining: Array = opponent_order.slice(1)
 	var expected := 0.0
 	for die_roll in range(1, 7):
+		# Three consecutive sixes forfeit the turn before any move is made.
+		if die_roll == 6 and consecutive_sixes >= 2:
+			expected += multi_opponent_reply_risk(player, board, remaining, depth - 1, team_match, player_count, 0) / 6.0
+			continue
 		var moves: Array[Dictionary] = legal_moves_for_board(opponent, board, die_roll, player_count)
-		var best_value := 0.0
-		for move in moves:
-			var outcome := apply_move(opponent, board, move, team_match, player_count)
-			var immediate: float = reply_utility(player, opponent, board, outcome.board, outcome.captured, team_match, player_count)
-			var continuation: float = multi_opponent_reply_risk(player, outcome.board, remaining, depth - 1, team_match, player_count)
-			best_value = maxf(best_value, immediate + continuation)
-		expected += best_value / 6.0
+		var best_value := -INF
+		if moves.is_empty():
+			var next_streak := consecutive_sixes + 1 if die_roll == 6 else 0
+			var continuation_order: Array = opponent_order if die_roll == 6 else remaining
+			best_value = multi_opponent_reply_risk(player, board, continuation_order, depth - 1, team_match, player_count, next_streak)
+		else:
+			for move in moves:
+				var outcome := apply_move(opponent, board, move, team_match, player_count)
+				var immediate: float = reply_utility(player, opponent, board, outcome.board, outcome.captured, team_match, player_count)
+				var earns_bonus := die_roll == 6 or not outcome.captured.is_empty()
+				var next_streak := consecutive_sixes + 1 if die_roll == 6 else 0
+				var continuation_order: Array = opponent_order if earns_bonus else remaining
+				var continuation: float = multi_opponent_reply_risk(player, outcome.board, continuation_order, depth - 1, team_match, player_count, next_streak)
+				best_value = maxf(best_value, immediate + continuation)
+		expected += maxf(0.0, best_value) / 6.0
 	return expected
 
 static func next_opponent_order(color: String, team_match: bool = false, player_count: int = 4) -> Array[String]:
