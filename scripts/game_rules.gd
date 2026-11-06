@@ -8,6 +8,26 @@ const TRACK := [Vector2i(6,0),Vector2i(6,1),Vector2i(6,2),Vector2i(6,3),Vector2i
 const LANES := {"red":[Vector2i(7,1),Vector2i(7,2),Vector2i(7,3),Vector2i(7,4),Vector2i(7,5),Vector2i(7,6)],"green":[Vector2i(1,7),Vector2i(2,7),Vector2i(3,7),Vector2i(4,7),Vector2i(5,7),Vector2i(6,7)],"yellow":[Vector2i(7,13),Vector2i(7,12),Vector2i(7,11),Vector2i(7,10),Vector2i(7,9),Vector2i(7,8)],"blue":[Vector2i(13,7),Vector2i(12,7),Vector2i(11,7),Vector2i(10,7),Vector2i(9,7),Vector2i(8,7)]}
 const YARDS := {"red":[Vector2i(2,2),Vector2i(4,2),Vector2i(2,4),Vector2i(4,4)],"green":[Vector2i(2,10),Vector2i(4,10),Vector2i(2,12),Vector2i(4,12)],"yellow":[Vector2i(10,10),Vector2i(12,10),Vector2i(10,12),Vector2i(12,12)],"blue":[Vector2i(10,2),Vector2i(12,2),Vector2i(10,4),Vector2i(12,4)]}
 
+static func human_player_count(mode: String) -> int:
+	match mode:
+		"human_ai":
+			return 1
+		"multiplayer":
+			return 4
+		"lan":
+			return 0
+		_:
+			return 1
+
+static func is_human_seat(mode: String, player: int, local_lan_seat: int = -1) -> bool:
+	if mode == "human_ai":
+		return player == 0
+	if mode == "multiplayer":
+		return player >= 0 and player < 4
+	if mode == "lan":
+		return player == local_lan_seat and local_lan_seat >= 0
+	return player == 0
+
 static func absolute(color: String, progress: int) -> int:
 	return (int(START[color]) + progress) % 52
 
