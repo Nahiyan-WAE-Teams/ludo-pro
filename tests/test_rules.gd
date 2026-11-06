@@ -3,42 +3,66 @@ extends SceneTree
 const RULES = preload("res://scripts/game_rules.gd")
 
 func _initialize() -> void:
-	# Release rules.
+	# Release and exact-finish rules.
 	assert(RULES.legal_moves([-1, -1, -1, -1], 5).is_empty())
 	assert(RULES.legal_moves([-1, -1, -1, -1], 6).size() == 4)
-
-	# Track offsets and exact home entry.
-	assert(RULES.absolute("red", 0) == 0)
-	assert(RULES.absolute("green", 0) == 13)
-	assert(RULES.absolute("yellow", 0) == 26)
-	assert(RULES.absolute("blue", 0) == 39)
 	assert(RULES.legal_moves([54, -1, -1, -1], 2)[0].to == 56)
 	assert(RULES.legal_moves([54, -1, -1, -1], 3).is_empty())
 	assert(RULES.legal_moves([57, -1, -1, -1], 6).size() == 3)
 
-	# Safe-square and capture scoring.
+	# Track offsets.
+	assert(RULES.absolute("red", 0) == 0)
+	assert(RULES.absolute("green", 0) == 13)
+	assert(RULES.absolute("yellow", 0) == 26)
+	assert(RULES.absolute("blue", 0) == 39)
+
 	var board := {
 		"red":[-1, -1, -1, -1],
 		"green":[-1, -1, -1, -1],
 		"yellow":[-1, -1, -1, -1],
 		"blue":[-1, -1, -1, -1]
 	}
-	board["green"][0] = 44
-	var capture_move := {"token":0, "from":4, "to":5, "kind":"move"}
-	var capture_score: int = RULES.score_move("red", board, capture_move, 1)
-	assert(capture_score >= 900)
 
-	board["green"][0] = 8
-	var safe_move := {"token":0, "from":7, "to":8, "kind":"move"}
-	var safe_score: int = RULES.score_move("red", board, safe_move, 1)
-	assert(safe_score >= 28)
+	# Applying a capture changes the copy, never the source board.
+	board["red"][0] = 4
+	board["green"][0] = 44 # Green absolute square 5, same as red progress 5.
+	var capture := {"token":0, "from":4, "to":5, "kind":"move"}
+	var outcome: Dictionary = RULES.apply_move("red", board, capture)
+	assert(outcome.captured.size() == 1)
+	assert(outcome.board["green"][0] == -1)
+	assert(outcome.board["red"][0] == 5)
+	assert(board["green"][0] == 44)
 
-	# AI returns a legal move and prefers immediate victory.
-	var moves: Array[Dictionary] = RULES.legal_moves([54, -1, -1, -1], 2)
-	assert(RULES.choose_ai_move("red", board, moves, 2, "champion") == moves[0])
+	# Safe squares are immune to threat calculations.
+	assert(RULES.threat_count("red", 5, board) > 0)
+	assert(RULES.threat_count("red", 8, board) == 0)
 
-	# Victory requires all four tokens to reach home.
+	# Champion AI avoids a square that an opponent can reach next roll.
+	var danger_board := {
+		"red":[0, 10, -1, -1],
+		"green":[40, -1, -1, -1],
+		"yellow":[-1, -1, -1, -1],
+		"blue":[-1, -1, -1, -1]
+	}
+	var options: Array[Dictionary] = RULES.legal_moves(danger_board.red, 5)
+	assert(options.size() == 2)
+	var champion_choice: Dictionary = RULES.choose_ai_move("red", danger_board, options, 5, "champion")
+	assert(champion_choice.token == 1)
+	assert(champion_choice.to == 15)
+
+	# A winning move is preferred, and bonus-turn planning returns a usable score.
+	var home_board := {
+		"red":[54, -1, -1, -1],
+		"green":[-1, -1, -1, -1],
+		"yellow":[-1, -1, -1, -1],
+		"blue":[-1, -1, -1, -1]
+	}
+	var home_moves: Array[Dictionary] = RULES.legal_moves(home_board.red, 2)
+	assert(RULES.choose_ai_move("red", home_board, home_moves, 2, "champion") == home_moves[0])
+	assert(RULES.extra_turn_lookahead("red", home_board) >= 0.0)
+
+	# Home-state scoring and winner detection.
 	assert(RULES.is_winner([57, 57, 57, 57]))
 	assert(not RULES.is_winner([57, 57, 57, 56]))
-	print("LUDO PRO RULE TESTS PASSED")
+	print("LUDO PRO ADVANCED AI TESTS PASSED")
 	quit()
