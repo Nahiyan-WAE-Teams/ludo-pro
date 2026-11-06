@@ -66,6 +66,14 @@ func _initialize() -> void:
 	assert(RULES.legal_moves_for_board("red", blockade_board, 3, 4).is_empty())
 	var blockade_escape := RULES.legal_moves_for_board("green", blockade_board, 1, 4)
 	assert(blockade_escape.size() == 2) # Either token may leave the blockade.
+	var home_entry_blockade := {
+		"red":[50, -1, -1, -1],
+		"green":[38, 38, -1, -1], # Blockade at absolute square 51.
+		"yellow":[-1, -1, -1, -1],
+		"blue":[-1, -1, -1, -1]
+	}
+	assert(RULES.legal_moves_for_board("red", home_entry_blockade, 3, 4).is_empty())
+
 	var friendly_stack_board := {
 		"red":[0, 1, -1, -1],
 		"green":[-1, -1, -1, -1],
