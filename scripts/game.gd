@@ -877,7 +877,6 @@ func handle_tap(point: Vector2) -> void:
 			queue_redraw()
 		return
 	if setup_open:
-if setup_open:
 		if Rect2(350, 246, 175, 48).has_point(point):
 			mode = "human_ai"
 		elif Rect2(545, 246, 175, 48).has_point(point):
