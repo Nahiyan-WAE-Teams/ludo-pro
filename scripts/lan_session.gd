@@ -128,14 +128,13 @@ func _on_connected_to_server() -> void:
 	session_status.emit("Connected. Waiting for the host to assign your seat.")
 
 func _on_server_disconnected() -> void:
-	connected = false
-	local_seat = -1
-	session_status.emit("The host disconnected.")
+	disconnect_session()
+	session_status.emit("The host disconnected. Return to the LAN lobby to reconnect.")
 	snapshot_received.emit({"disconnected": true})
 
 func _on_connection_failed() -> void:
-	connected = false
-	session_status.emit("Connection failed. Check the host IP and Wi-Fi network.")
+	disconnect_session()
+	session_status.emit("Connection failed. Check the host IP and Wi-Fi network, then retry.")
 
 @rpc("any_peer", "call_remote", "reliable")
 func request_action_remote(action: String, payload: Dictionary) -> void:

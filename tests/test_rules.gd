@@ -20,11 +20,24 @@ func _initialize() -> void:
 	assert(RULES.next_active_player(0, 2) == 2)
 	assert(RULES.next_active_player(2, 2) == 0)
 	assert(RULES.next_active_player(2, 3) == 0)
+
+	# Champion AI must not simulate seats that are inactive in 2P/3P games.
+	var ghost_board := {
+		"red":[10, -1, -1, -1],
+		"green":[47, -1, -1, -1], # Green is inactive in a 2-player match.
+		"yellow":[-1, -1, -1, -1],
+		"blue":[-1, -1, -1, -1]
+	}
+	assert(RULES.threat_count("red", 10, ghost_board, false, 2) == 0)
+	assert(RULES.next_opponent_order("red", false, 2) == ["yellow"])
+	assert(RULES.next_opponent_order("red", false, 3) == ["green", "yellow"])
+	assert(RULES.next_opponent_order("yellow", false, 2) == ["red"])
 	assert(RULES.human_player_count("multiplayer", 2) == 2)
 	assert(RULES.is_human_seat("human_ai", 0, -1, 2))
 	assert(not RULES.is_human_seat("human_ai", 2, -1, 2))
 	assert(RULES.team_colors("red") == ["red", "yellow"])
 	assert(RULES.team_colors("blue") == ["green", "blue"])
+	assert(RULES.next_opponent_order("red", true, 4) == ["green", "yellow", "blue"]) # Partner turn is part of the real sequence.
 	var team_board := {
 		"red":[57, 57, 57, 57],
 		"green":[-1, -1, -1, -1],
@@ -32,12 +45,53 @@ func _initialize() -> void:
 		"blue":[-1, -1, -1, -1]
 	}
 	assert(RULES.is_team_winner(team_board, "red"))
+	assert(RULES.evaluate_position("red", team_board, true) > RULES.evaluate_position("red", team_board, false))
 	var teammate_board := {"red":[4,-1,-1,-1], "green":[-1,-1,-1,-1], "yellow":[31,-1,-1,-1], "blue":[-1,-1,-1,-1]}
 	var teammate_capture := RULES.apply_move("red", teammate_board, {"token":0,"from":4,"to":5,"kind":"move"}, true)
 	assert(teammate_capture.captured.is_empty())
 	assert(teammate_capture.board["yellow"][0] == 31)
 	assert(not RULES.is_team_winner(team_board, "green"))
 	assert(RULES.team_victory_announcement("red").contains("Ruby & Amber"))
+
+	# Turn-state helpers share the live game's six/bonus rules with Champion search.
+	assert(RULES.next_six_streak(6, 0) == 1)
+	assert(RULES.next_six_streak(6, 1) == 2)
+	assert(RULES.is_forfeited_third_six(6, 2))
+	assert(not RULES.is_forfeited_third_six(5, 2))
+	assert(RULES.next_six_streak(3, 2) == 0)
+	assert(RULES.earns_bonus_turn(6, false))
+	assert(RULES.earns_bonus_turn(4, true))
+	assert(not RULES.earns_bonus_turn(4, false))
+
+	# Classic blockade rules: two same-color tokens block crossing and landing.
+	var blockade_board := {
+		"red":[5, -1, -1, -1],
+		"green":[47, 47, -1, -1], # Green tokens form a blockade at absolute square 8.
+		"yellow":[-1, -1, -1, -1],
+		"blue":[-1, -1, -1, -1]
+	}
+	assert(RULES.is_blockade_at(blockade_board, 8, 4))
+	assert(not RULES.is_blockade_at(blockade_board, 8, 2)) # Inactive seats cannot create phantom blockades.
+	assert(RULES.legal_moves_for_board("red", blockade_board, 3, 2).size() == 1)
+	assert(RULES.legal_moves_for_board("red", blockade_board, 4, 4).is_empty())
+	assert(RULES.legal_moves_for_board("red", blockade_board, 3, 4).is_empty())
+	var blockade_escape := RULES.legal_moves_for_board("green", blockade_board, 1, 4)
+	assert(blockade_escape.size() == 2) # Either token may leave the blockade.
+	var home_entry_blockade := {
+		"red":[50, -1, -1, -1],
+		"green":[38, 38, -1, -1], # Blockade at absolute square 51.
+		"yellow":[-1, -1, -1, -1],
+		"blue":[-1, -1, -1, -1]
+	}
+	assert(RULES.legal_moves_for_board("red", home_entry_blockade, 3, 4).is_empty())
+
+	var friendly_stack_board := {
+		"red":[0, 1, -1, -1],
+		"green":[-1, -1, -1, -1],
+		"yellow":[-1, -1, -1, -1],
+		"blue":[-1, -1, -1, -1]
+	}
+	assert(RULES.legal_moves_for_board("red", friendly_stack_board, 1, 4).size() == 2)
 
 	# Release and exact-finish rules.
 	assert(RULES.legal_moves([-1, -1, -1, -1], 5).is_empty())
@@ -68,6 +122,17 @@ func _initialize() -> void:
 	assert(outcome.board["green"][0] == -1)
 	assert(outcome.board["red"][0] == 5)
 	assert(board["green"][0] == 44)
+
+	# Safe squares also prevent capture during the canonical move resolution.
+	var safe_capture_board := {
+		"red":[7, -1, -1, -1],
+		"green":[47, -1, -1, -1],
+		"yellow":[-1, -1, -1, -1],
+		"blue":[-1, -1, -1, -1]
+	}
+	var safe_landing := RULES.apply_move("red", safe_capture_board, {"token":0,"from":7,"to":8,"kind":"move"})
+	assert(safe_landing.captured.is_empty())
+	assert(safe_landing.board["green"][0] == 47)
 
 	# Safe squares are immune to threat calculations.
 	assert(RULES.threat_count("red", 5, board) > 0)

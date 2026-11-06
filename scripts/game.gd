@@ -140,6 +140,7 @@ func _on_lan_snapshot(snapshot: Dictionary) -> void:
 	if snapshot.has("disconnected"):
 		busy = true
 		phase = "lan_disconnected"
+		queue_redraw()
 		return
 	if lan_session.is_host():
 		return
@@ -593,13 +594,13 @@ func finish_roll() -> void:
 	busy = false
 	roll = die
 	show_banner("%s ROLLED A %d" % [N[R.COLORS[turn]], roll], C[R.COLORS[turn]])
-	if roll == 6 and sixes == 2:
+	if R.is_forfeited_third_six(roll, sixes):
 		add_log("%s forfeits after three sixes." % N[R.COLORS[turn]])
 		sixes = 0
 		next_turn()
 		return
-	sixes = sixes + 1 if roll == 6 else 0
-	choices = R.legal_moves(pieces[R.COLORS[turn]], roll)
+	sixes = R.next_six_streak(roll, sixes)
+	choices = R.legal_moves_for_board(R.COLORS[turn], pieces, roll, player_count)
 	if choices.is_empty():
 		add_log("%s rolled %d. No legal move." % [N[R.COLORS[turn]], roll])
 		if roll != 6:
@@ -635,20 +636,13 @@ func finish_animation() -> void:
 	var color: String = anim_data.color
 	var index: int = anim_data.token
 	var target: int = anim_data.to
-	pieces[color][index] = 57 if target == 56 else target
-	var captured := false
-	if target < 52:
-		var absolute_target: int = R.absolute(color, target)
-		if absolute_target not in R.SAFE:
-			for enemy in R.COLORS:
-				if enemy == color or (team_match and enemy in R.team_colors(color)):
-					continue
-				for enemy_index in range(4):
-					var enemy_pos: int = pieces[enemy][enemy_index]
-					if enemy_pos >= 0 and enemy_pos < 52 and R.absolute(enemy, enemy_pos) == absolute_target:
-						pieces[enemy][enemy_index] = -1
-						spawn_burst(progress_point(color, target, index), C[color], 12)
-						captured = true
+	var move := {"token": index, "from": int(anim_data.from), "to": target, "kind": "home" if target == 56 else ("release" if int(anim_data.from) == -1 else "move")}
+	var outcome: Dictionary = R.apply_move(color, pieces, move, team_match, player_count)
+	pieces = outcome.board
+	var captured := not outcome.captured.is_empty()
+	if captured:
+		for _victim in outcome.captured:
+			spawn_burst(progress_point(color, target, index), C[color], 12)
 	if captured:
 		captures += 1
 		show_banner("CAPTURE! BONUS TURN", GOLD)
@@ -674,7 +668,7 @@ func finish_animation() -> void:
 			publish_lan_state()
 		queue_redraw()
 		return
-	if roll != 6 and not captured:
+	if not R.earns_bonus_turn(roll, captured):
 		next_turn()
 	else:
 		roll = 0
@@ -704,7 +698,7 @@ func ai_choose_move() -> void:
 	if champion != "" or is_human(turn) or phase != "move" or busy:
 		return
 	var color: String = R.COLORS[turn]
-	var move := R.choose_ai_move(color, pieces, choices, roll, difficulty, team_match)
+	var move := R.choose_ai_move(color, pieces, choices, roll, difficulty, team_match, player_count)
 	if not move.is_empty():
 		commit_move(move)
 
@@ -806,12 +800,13 @@ func draw_rules() -> void:
 		"Capture opponents by landing on their square.",
 		"Safe squares protect tokens from being captured.",
 		"Enter your home lane and reach the center with an exact roll.",
+		"Two same-color tokens form a blockade that no token can pass.",
 		"A six or capture earns another turn. Three sixes in a row forfeit it.",
 		"Bring all four tokens home first to win the match."
 	]
 	for i in range(rules.size()):
-		draw_circle(Vector2(350, 253 + i * 39), 3, GOLD)
-		draw_string(ThemeDB.fallback_font, Vector2(367, 258 + i * 39), rules[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color("#d0d9dd"))
+		draw_circle(Vector2(350, 253 + i * 34), 3, GOLD)
+		draw_string(ThemeDB.fallback_font, Vector2(367, 258 + i * 34), rules[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("#d0d9dd"))
 	draw_round_rect(Rect2(340, 535, 190, 48), GOLD, 9)
 	draw_string(ThemeDB.fallback_font, Vector2(365, 565), "BACK TO GAME", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color("#202a30"))
 
@@ -899,8 +894,8 @@ func handle_tap(point: Vector2) -> void:
 				lan_lobby_open = true
 				ip_input.visible = true
 			else:
-				if lan_session.is_active():
-					lan_session.disconnect_session()
+				# Always clear a stale ENet peer, including after an async disconnect.
+				lan_session.disconnect_session()
 				local_lan_seat = -1
 				lan_lobby_open = false
 				ip_input.visible = false
