@@ -3,5 +3,5 @@ test("tokens leave yard only on a six",()=>{const g=createGame();assert.equal(le
 test("six releases a token and grants another turn",()=>{let g=createGame();g=rollDice(g,6);g=applyMove(g,legalMoves(g)[0]);assert.equal(g.turn,0);assert.equal(g.players[0].tokens[0],0);});
 test("no legal move passes turn after a non-six",()=>{const g=rollDice(createGame(),3);assert.equal(g.turn,1);});
 test("all four tokens must reach home to win",()=>{let g=createGame();g.players[0].tokens=[57,57,57,55];g.dice=1;g.phase="move";g=applyMove(g,{token:3,from:55,to:56,kind:"home"});assert.equal(g.winner,"red");});
-test("champion AI selects a capture",()=>{const g=createGame("solo","champion");g.players[0].tokens=[0,10,-1,-1];g.players[1].tokens[0]=0;g.dice=1;const ms=[{token:0,from:0,to:1,kind:"move"},{token:1,from:10,to:11,kind:"move"}];assert.equal(chooseAiMove(g,ms).token,0);});
+test("champion AI selects a capture",()=>{const g=createGame("solo","champion");g.players[0].tokens=[0,10,-1,-1];g.players[1].tokens[0]=40;g.dice=1;const ms=[{token:0,from:0,to:1,kind:"move"},{token:1,from:10,to:11,kind:"move"}];assert.equal(chooseAiMove(g,ms).token,0);});
 test("safe positions and route indexing are stable",()=>{assert.ok(SAFE.has(0));assert.equal(absolute("red",0),0);});
