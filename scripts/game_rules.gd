@@ -100,7 +100,7 @@ static func evaluate_position(color: String, board: Dictionary) -> float:
 		elif pos == -1:
 			score += 7.0
 		elif pos >= 52:
-			score += 105.0 + float(pos - 52) * 31.0
+			score += 150.0 + float(pos - 52) * 35.0
 		else:
 			score += 12.0 + float(pos) * 2.25
 			var threats: int = threat_count(color, pos, board)
