@@ -61,6 +61,24 @@ func _initialize() -> void:
 	assert(RULES.choose_ai_move("red", home_board, home_moves, 2, "champion") == home_moves[0])
 	assert(RULES.extra_turn_lookahead("red", home_board) >= 0.0)
 
+	# Champion reply search and celebration announcement contracts.
+	var exposed_board := {
+		"red":[12, 20, -1, -1],
+		"green":[8, -1, -1, -1],
+		"yellow":[-1, -1, -1, -1],
+		"blue":[-1, -1, -1, -1]
+	}
+	var safe_board := {
+		"red":[13, 20, -1, -1],
+		"green":[8, -1, -1, -1],
+		"yellow":[-1, -1, -1, -1],
+		"blue":[-1, -1, -1, -1]
+	}
+	var opponents := ["green", "yellow", "blue"]
+	assert(RULES.multi_opponent_reply_risk("red", exposed_board, opponents, 3) >= 0.0)
+	assert(RULES.multi_opponent_reply_risk("red", safe_board, opponents, 3) >= 0.0)
+	assert(RULES.victory_announcement("red") == "Congratulations, Ruby! You are the Ludo Pro champion!")
+
 	# Home-state scoring and winner detection.
 	assert(RULES.is_winner([57, 57, 57, 57]))
 	assert(not RULES.is_winner([57, 57, 57, 56]))
