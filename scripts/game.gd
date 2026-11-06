@@ -33,7 +33,8 @@ var busy=false
 
 func _ready():
 	rng.randomize()
-	new_match()
+	if not load_match():
+		new_match()
 
 func _process(delta):
 	if rolling>0:
@@ -148,7 +149,8 @@ func draw_sidebar():
 	draw_string(ThemeDB.fallback_font,Vector2(980,528),"NEW MATCH",HORIZONTAL_ALIGNMENT_LEFT,-1,11,Color("#f1e5cc"))
 	draw_line(Vector2(728,572),Vector2(1216,572),Color("#ffffff18"))
 	draw_string(ThemeDB.fallback_font,Vector2(728,597),"TURNS %d     CAPTURES %d     HOME %d"%[turns,captures,homes],HORIZONTAL_ALIGNMENT_LEFT,-1,10,Color("#c2cbd0"))
-	draw_string(ThemeDB.fallback_font,Vector2(728,638),"MODE %s    AI %s"%[mode.to_upper(),difficulty.to_upper()],HORIZONTAL_ALIGNMENT_LEFT,-1,9,Color("#81919b"))
+	draw_string(ThemeDB.fallback_font,Vector2(728,638),"MODE  %s  ↻"%mode.to_upper(),HORIZONTAL_ALIGNMENT_LEFT,-1,9,GOLD)
+	draw_string(ThemeDB.fallback_font,Vector2(930,638),"AI  %s  ↻"%difficulty.to_upper(),HORIZONTAL_ALIGNMENT_LEFT,-1,9,GOLD)
 	draw_string(ThemeDB.fallback_font,Vector2(728,665),"RULES",HORIZONTAL_ALIGNMENT_LEFT,-1,9,GOLD)
 	draw_string(ThemeDB.fallback_font,Vector2(1154,665),"AUTO-SAVED",HORIZONTAL_ALIGNMENT_LEFT,-1,8,Color("#81919b"))
 
@@ -376,7 +378,17 @@ func handle_tap(p:Vector2):
 		return
 	if Rect2(728,488,214,66).has_point(p): roll_dice(); queue_redraw(); return
 	if Rect2(958,488,230,66).has_point(p): new_match(); return
-	if Rect2(720,640,100,42).has_point(p): rules_open=true; queue_redraw(); return
+	if Rect2(720,625,180,32).has_point(p):
+		var modes=["solo","duo","local"]
+		mode=modes[(modes.find(mode)+1)%modes.size()]
+		new_match()
+		return
+	if Rect2(920,625,220,32).has_point(p):
+		var levels=["balanced","tactical","champion"]
+		difficulty=levels[(levels.find(difficulty)+1)%levels.size()]
+		new_match()
+		return
+	if Rect2(720,650,130,42).has_point(p): rules_open=true; queue_redraw(); return
 	if phase!="move" or not is_human(turn) or busy: return
 	var color=R.COLORS[turn]
 	for m in choices:
