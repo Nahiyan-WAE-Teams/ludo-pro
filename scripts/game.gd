@@ -599,7 +599,7 @@ func finish_roll() -> void:
 		next_turn()
 		return
 	sixes = sixes + 1 if roll == 6 else 0
-	choices = R.legal_moves(pieces[R.COLORS[turn]], roll)
+	choices = R.legal_moves_for_board(R.COLORS[turn], pieces, roll, player_count)
 	if choices.is_empty():
 		add_log("%s rolled %d. No legal move." % [N[R.COLORS[turn]], roll])
 		if roll != 6:
@@ -635,20 +635,13 @@ func finish_animation() -> void:
 	var color: String = anim_data.color
 	var index: int = anim_data.token
 	var target: int = anim_data.to
-	pieces[color][index] = 57 if target == 56 else target
-	var captured := false
-	if target < 52:
-		var absolute_target: int = R.absolute(color, target)
-		if absolute_target not in R.SAFE:
-			for enemy in R.COLORS:
-				if enemy == color or (team_match and enemy in R.team_colors(color)):
-					continue
-				for enemy_index in range(4):
-					var enemy_pos: int = pieces[enemy][enemy_index]
-					if enemy_pos >= 0 and enemy_pos < 52 and R.absolute(enemy, enemy_pos) == absolute_target:
-						pieces[enemy][enemy_index] = -1
-						spawn_burst(progress_point(color, target, index), C[color], 12)
-						captured = true
+	var move := {"token": index, "from": int(anim_data.from), "to": target, "kind": "home" if target == 56 else ("release" if int(anim_data.from) == -1 else "move")}
+	var outcome: Dictionary = R.apply_move(color, pieces, move, team_match, player_count)
+	pieces = outcome.board
+	var captured := not outcome.captured.is_empty()
+	if captured:
+		for _victim in outcome.captured:
+			spawn_burst(progress_point(color, target, index), C[color], 12)
 	if captured:
 		captures += 1
 		show_banner("CAPTURE! BONUS TURN", GOLD)
