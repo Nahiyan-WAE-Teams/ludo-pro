@@ -265,8 +265,8 @@ static func reply_utility(player: String, opponent: String, before: Dictionary, 
 	var opponent_gain: float = evaluate_position(opponent, after, team_match, player_count) - evaluate_position(opponent, before, team_match, player_count)
 	return opponent_gain * 1.15 - player_gain * 1.25 + float(captured.size()) * 42.0
 
-# Expectimax over the next three opponents. Each opponent observes the same board,
-# receives an unknown fair die roll, then chooses the response with the best outcome.
+# Expectimax over upcoming active seats, including the ally in team mode.
+# Opponents maximize risk; the ally chooses the response that best helps the team.
 static func multi_opponent_reply_risk(player: String, board: Dictionary, opponent_order: Array, depth: int = 3, team_match: bool = false, player_count: int = 4, consecutive_sixes: int = 0) -> float:
 	if depth <= 0 or opponent_order.is_empty():
 		return 0.0
